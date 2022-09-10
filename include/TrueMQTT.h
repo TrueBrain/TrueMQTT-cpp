@@ -32,13 +32,45 @@ namespace TrueMQTT
 
         /**
          * @brief The type of queue that can be set for publishing messages.
+         *
+         * When there is no connection to a broker, some choices have to be made what
+         * to do with messages that are published.
+         *
+         * - Do we queue the message?
+         * - What do we do when the queue is full?
+         *
+         * After all, memory is finite, so this allows you to configure what scenario
+         * works best for you.
          */
-        enum QueueType
+        enum PublishQueueType
         {
-            DROP,           ///< Do not queue.
-            FIFO,           ///< Global FIFO.
-            LIFO,           ///< Global LIFO.
-            LIFO_PER_TOPIC, ///< Per topic LIFO.
+            DROP, ///< Do not queue.
+
+            /**
+             * @brief First-in-First-out queue.
+             *
+             * For a size 3 queue this means if we publish 6 messages (M1 .. M6), the result is:
+             *
+             *  [ M4, M5, M6 ]
+             *
+             * When publishing the next message (M7) it becomes:
+             *
+             *  [ M5, M6, M7 ]
+             */
+            FIFO,
+
+            /**
+             * @brief Last-in-First-out queue.
+             *
+             * For a size 3 queue this means if we publish 6 messages (M1 .. M6), the result is:
+             *
+             *  [ M1, M2, M6 ]
+             *
+             * When publishing the next message (M7) it becomes:
+             *
+             *  [ M1, M2, M7 ]
+             */
+            LIFO,
         };
 
         /**
@@ -90,11 +122,14 @@ namespace TrueMQTT
          * @param topic The topic to publish the last will message to.
          * @param payload The payload of the last will message.
          * @param retain Whether to retain the last will message.
+         *
+         * @note Cannot be called after \ref connect.
          */
         void setLastWill(const std::string &topic, const std::string &payload, bool retain);
 
         /**
          * @brief Set the error callback, called when any error occurs.
+         *
          * @param callback The callback to call when an error occurs.
          */
         void setErrorCallback(std::function<void(Error, std::string &)> callback);
@@ -102,10 +137,12 @@ namespace TrueMQTT
         /**
          * @brief Set the publish queue to use.
          *
-         * @param queue_type The \ref QueueType to use for the publish queue.
+         * @param queue_type The \ref PublishQueueType to use for the publish queue.
          * @param size The size of the queue. If the queue is full, the type of queue defines what happens.
+         *
+         * @note Cannot be called after \ref connect.
          */
-        void setPublishQueue(QueueType queue_type, int size);
+        void setPublishQueue(PublishQueueType queue_type, size_t size);
 
         /**
          * @brief Connect to the broker.
@@ -128,11 +165,18 @@ namespace TrueMQTT
          * Additionally, it will clean any publish / subscribe information it has.
          *
          * @note Calling disconnect twice has no effect.
+         * @note This function can stall for a short moment if you disconnect just at the
+         * moment the connection to the broker is established, and there are messages in the
+         * publish queue and/or subscriptions.
          */
         void disconnect();
 
         /**
          * @brief Publish a payload on a topic.
+         *
+         * After \ref connect is called, this function will either publish the message
+         * immediately (if connected) or queue it for later (if still connecting).
+         * In the latter case, it will be published as soon as the connection is established.
          *
          * @param topic The topic to publish the payload on.
          * @param payload The payload to publish.
@@ -142,11 +186,22 @@ namespace TrueMQTT
          * other QoS level.
          * @note This call is non-blocking, and it is not possible to know whether the message
          * was actually published or not.
+         * @note You cannot publish a message if you are disconnected from the broker. Call
+         * \ref connect first.
+         * @note This function can stall for a short moment if you publish just at the
+         * moment the connection to the broker is established, and there are messages in the
+         * publish queue and/or subscriptions.
          */
         void publish(const std::string &topic, const std::string &payload, bool retain);
 
         /**
          * @brief Subscribe to a topic, and call the callback function when a message arrives.
+         *
+         * After \ref connect is called, this function will either subscribe to the topic
+         * immediately (if connected) or subscribe to it once a connection has been made.
+         * In case of a reconnect, it will also automatically resubscribe.
+         *
+         * If the broker refuses the subscribe request, the error-callback is called.
          *
          * @param topic The topic to subscribe to.
          * @param callback The callback to call when a message arrives on this topic.
@@ -155,15 +210,27 @@ namespace TrueMQTT
          * If you do, the callback of the first subscription will be overwritten.
          * In other words, "a/+" and "a/b" is fine, and callbacks for both subscribes will be
          * called when something is published on "a/b".
+         * @note You cannot subscribe a topic if you are disconnected from the broker. Call
+         * \ref connect first.
+         * @note This function can stall for a short moment if you publish just at the
+         * moment the connection to the broker is established, and there are messages in the
+         * publish queue and/or subscriptions.
          */
         void subscribe(const std::string &topic, std::function<void(std::string, std::string)> callback);
 
         /**
          * @brief Unsubscribe from a topic.
          *
+         * If the broker refuses the unsubscribe request, the error-callback is called.
+         *
          * @param topic The topic to unsubscribe from.
          *
          * @note If you unsubscribe from a topic you were not subscribed too, nothing happens.
+         * @note You cannot unsubscribe from a topic if you are disconnected from the broker.
+         * Call \ref connect (and \ref subscribe) first.
+         * @note This function can stall for a short moment if you publish just at the
+         * moment the connection to the broker is established, and there are messages in the
+         * publish queue and/or subscriptions.
          */
         void unsubscribe(const std::string &topic);
 

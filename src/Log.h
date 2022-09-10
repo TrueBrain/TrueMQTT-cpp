@@ -8,11 +8,10 @@
 #pragma once
 
 // Wrappers to make logging a tiny bit easier to read.
-// It heavily depends on Client.cpp's structure, and assumes
-// this->m_impl is reachable.
+// The "obj" is the Client::Impl instance to point to.
 
 #define LOGGER_LEVEL_ERROR 0
-#define LOGGER_LEVEL_WARN 1
+#define LOGGER_LEVEL_WARNING 1
 #define LOGGER_LEVEL_INFO 2
 #define LOGGER_LEVEL_DEBUG 3
 #define LOGGER_LEVEL_TRACE 4
@@ -23,51 +22,51 @@
 #endif
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_ERROR
-#define LOG_ERROR(x)                                        \
-    if (this->m_impl->log_level >= Client::LogLevel::ERROR) \
-    {                                                       \
-        this->m_impl->logger(Client::LogLevel::ERROR, x);   \
+#define LOG_ERROR(obj, x)                          \
+    if (obj->log_level >= Client::LogLevel::ERROR) \
+    {                                              \
+        obj->logger(Client::LogLevel::ERROR, x);   \
     }
 #else
-#define LOG_ERROR(x)
+#define LOG_ERROR(obj, x)
 #endif
 
-#if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_WARN
-#define LOG_WARN(x)                                       \
-    if (this->m_impl->log_level >= Client::LogLevel::WARN) \
-    {                                                      \
-        this->m_impl->logger(Client::LogLevel::WARN, x);   \
+#if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_WARNING
+#define LOG_WARNING(obj, x)                          \
+    if (obj->log_level >= Client::LogLevel::WARNING) \
+    {                                                \
+        obj->logger(Client::LogLevel::WARNING, x);   \
     }
 #else
-#define LOG_WARN(x)
+#define LOG_WARNING(obj, x)
 #endif
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_INFO
-#define LOG_INFO(x)                                       \
-    if (this->m_impl->log_level >= Client::LogLevel::INFO) \
-    {                                                      \
-        this->m_impl->logger(Client::LogLevel::INFO, x);   \
+#define LOG_INFO(obj, x)                          \
+    if (obj->log_level >= Client::LogLevel::INFO) \
+    {                                             \
+        obj->logger(Client::LogLevel::INFO, x);   \
     }
 #else
-#define LOG_INFO(x)
+#define LOG_INFO(obj, x)
 #endif
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_DEBUG
-#define LOG_DEBUG(x)                                        \
-    if (this->m_impl->log_level >= Client::LogLevel::DEBUG) \
-    {                                                       \
-        this->m_impl->logger(Client::LogLevel::DEBUG, x);   \
+#define LOG_DEBUG(obj, x)                          \
+    if (obj->log_level >= Client::LogLevel::DEBUG) \
+    {                                              \
+        obj->logger(Client::LogLevel::DEBUG, x);   \
     }
 #else
-#define LOG_DEBUG(x)
+#define LOG_DEBUG(obj, x)
 #endif
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_TRACE
-#define LOG_TRACE(x)                                        \
-    if (this->m_impl->log_level >= Client::LogLevel::TRACE) \
-    {                                                       \
-        this->m_impl->logger(Client::LogLevel::TRACE, x);   \
+#define LOG_TRACE(obj, x)                          \
+    if (obj->log_level >= Client::LogLevel::TRACE) \
+    {                                              \
+        obj->logger(Client::LogLevel::TRACE, x);   \
     }
 #else
-#define LOG_TRACE(x)
+#define LOG_TRACE(obj, x)
 #endif
