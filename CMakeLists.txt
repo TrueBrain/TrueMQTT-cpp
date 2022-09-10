@@ -11,6 +11,7 @@ project(truemqtt VERSION 1.0.0 DESCRIPTION "A modern C++ MQTT Client library")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 set(MIN_LOGGER_LEVEL "INFO" CACHE STRING "Set minimal logger level (TRACE, DEBUG, INFO, WARNING, ERROR). No logs below this level will be omitted.")
 
@@ -18,8 +19,12 @@ include(GNUInstallDirs)
 
 add_library(${PROJECT_NAME}
     src/Client.cpp
+    src/Connection.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC include PRIVATE src)
+
+find_package(Threads REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION 1 PUBLIC_HEADER include/TrueMQTT.h)
 configure_file(truemqtt.pc.in truemqtt.pc @ONLY)

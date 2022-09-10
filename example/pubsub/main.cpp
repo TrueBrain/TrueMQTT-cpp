@@ -17,6 +17,8 @@ int main()
     client.setLogger(TrueMQTT::Client::LogLevel::TRACE, [](TrueMQTT::Client::LogLevel level, std::string message)
                      { std::cout << "Log " << level << ": " << message << std::endl; });
     client.setPublishQueue(TrueMQTT::Client::PublishQueueType::FIFO, 10);
+    client.setErrorCallback([](TrueMQTT::Client::Error error, std::string message)
+                            { std::cout << "Error " << error << ": " << message << std::endl; });
 
     client.connect();
 

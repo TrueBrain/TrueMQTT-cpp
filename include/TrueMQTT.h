@@ -24,10 +24,37 @@ namespace TrueMQTT
          */
         enum Error
         {
-            SUBSCRIBE_FAILED,   ///< The subscription failed. The topic that failed to subscribe is passed as the second argument.
-            UNSUBSCRIBE_FAILED, ///< The unsubscription failed. The topic that failed to unsubscribe is passed as the second argument.
-            DISCONNECTED,       ///< The connection was lost. The reason for the disconnection is passed as the second argument.
-            CONNECTION_FAILED,  ///< The connection failed. The reason for the failure is passed as the second argument.
+            /**
+             * @brief The hostname could not be resolved into either an IPv4 or IPv6 address.
+             *
+             * This happens if the DNS server didn't return any valid IPv4 or IPv6 address
+             * based on the hostname given.
+             *
+             * Due to the nature of this error, this library has no way to recover from
+             * this. As such, this is considered a fatal error and the library takes no
+             * attempt to gracefully handle this.
+             *
+             * @note This is a fatal error. You have to call \ref disconnect after this.
+             */
+            HOSTNAME_LOOKUP_FAILED,
+
+            /**
+             * @brief The subscription failed.
+             *
+             * The topic that failed to subscribe is passed as the second argument.
+             *
+             * @note This error is non-fatal.
+             */
+            SUBSCRIBE_FAILED,
+
+            /**
+             * @brief The unsubscription failed.
+             *
+             * The topic that failed to unsubscribe is passed as the second argument.
+             *
+             * @note This error is non-fatal.
+             */
+            UNSUBSCRIBE_FAILED,
         };
 
         /**
@@ -132,7 +159,7 @@ namespace TrueMQTT
          *
          * @param callback The callback to call when an error occurs.
          */
-        void setErrorCallback(std::function<void(Error, std::string &)> callback);
+        void setErrorCallback(std::function<void(Error, std::string)> callback);
 
         /**
          * @brief Set the publish queue to use.
