@@ -55,6 +55,7 @@ private:
         AUTHENTICATING,
         CONNECTED,
         BACKOFF,
+        STOP,
     };
 
     TrueMQTT::Client::LogLevel log_level;

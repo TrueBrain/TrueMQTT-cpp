@@ -21,20 +21,34 @@ int main()
                             { std::cout << "Error " << error << ": " << message << std::endl; });
 
     client.connect();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    bool stop = false;
+    int stop = 0;
 
     // Subscribe to the topic we will be publishing under in a bit.
-    client.subscribe("test", [&stop](const std::string &topic, const std::string &payload)
+    client.subscribe("test/test/test", [&stop](const std::string topic, const std::string payload)
                      {
-        std::cout << "Received message on topic " << topic << ": " << payload << std::endl;
-        stop = true; });
+        std::cout << "Received message on exact topic " << topic << ": " << payload << std::endl;
+        stop++; });
+    client.subscribe("test/+/test", [&stop](const std::string topic, const std::string payload)
+                     {
+        std::cout << "Received message on single wildcard topic " << topic << ": " << payload << std::endl;
+        stop++; });
+    client.subscribe("test/#", [&stop](const std::string topic, const std::string payload)
+                     {
+        std::cout << "Received message on multi wildcard topic " << topic << ": " << payload << std::endl;
+        stop++; });
+    client.subscribe("test/test/+", [&stop](const std::string topic, const std::string payload)
+                     {
+        /* Never actually called */ });
+
+    client.unsubscribe("test/test/+");
 
     // Publish a message on the same topic as we subscribed too.
-    client.publish("test", "Hello World!", false);
+    client.publish("test/test/test", "Hello World!", false);
 
     // Wait till we receive the message back on our subscription.
-    while (!stop)
+    while (stop != 3)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }

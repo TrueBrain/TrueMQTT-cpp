@@ -10,6 +10,8 @@
 #include "ClientImpl.h"
 #include "Log.h"
 
+#include <sstream>
+
 using TrueMQTT::Client;
 
 Client::Client(const std::string &host, int port, const std::string &client_id, int connection_timeout, int connection_backoff_max, int keep_alive_interval)
@@ -135,8 +137,21 @@ void Client::subscribe(const std::string &topic, std::function<void(std::string,
 
     LOG_DEBUG(this->m_impl, "Subscribing to topic '" + topic + "'");
 
-    this->m_impl->subscriptions[topic] = callback;
+    // Split the topic on /, to find each part.
+    std::string part;
+    std::stringstream stopic(topic);
+    std::getline(stopic, part, '/');
 
+    // Find the root node, and walk down till we find the leaf node.
+    Client::Impl::SubscriptionPart *subscriptions = &this->m_impl->subscriptions.try_emplace(part, Client::Impl::SubscriptionPart()).first->second;
+    while (std::getline(stopic, part, '/'))
+    {
+        subscriptions = &subscriptions->children.try_emplace(part, Client::Impl::SubscriptionPart()).first->second;
+    }
+    // Add the callback to the leaf node.
+    subscriptions->callbacks.push_back(callback);
+
+    this->m_impl->subscription_topics.insert(topic);
     if (this->m_impl->state == Client::Impl::State::CONNECTED)
     {
         this->m_impl->sendSubscribe(topic);
@@ -155,8 +170,46 @@ void Client::unsubscribe(const std::string &topic)
 
     LOG_DEBUG(this->m_impl, "Unsubscribing from topic '" + topic + "'");
 
-    this->m_impl->subscriptions.erase(topic);
+    // Split the topic on /, to find each part.
+    std::string part;
+    std::stringstream stopic(topic);
+    std::getline(stopic, part, '/');
 
+    // Find the root node, and walk down till we find the leaf node.
+    std::vector<std::tuple<std::string, Client::Impl::SubscriptionPart *>> reverse;
+    Client::Impl::SubscriptionPart *subscriptions = &this->m_impl->subscriptions[part];
+    reverse.push_back({part, subscriptions});
+    while (std::getline(stopic, part, '/'))
+    {
+        subscriptions = &subscriptions->children[part];
+        reverse.push_back({part, subscriptions});
+    }
+    // Clear the callbacks in the leaf node.
+    subscriptions->callbacks.clear();
+
+    // Bookkeeping: remove any empty nodes.
+    // Otherwise we will slowly grow in memory if a user does a lot of unsubscribes
+    // on different topics.
+    std::string remove_next = "";
+    for (auto it = reverse.rbegin(); it != reverse.rend(); it++)
+    {
+        if (!remove_next.empty())
+        {
+            std::get<1>(*it)->children.erase(remove_next);
+            remove_next = "";
+        }
+
+        if (std::get<1>(*it)->callbacks.empty() && std::get<1>(*it)->children.empty())
+        {
+            remove_next = std::get<0>(*it);
+        }
+    }
+    if (!remove_next.empty())
+    {
+        this->m_impl->subscriptions.erase(remove_next);
+    }
+
+    this->m_impl->subscription_topics.erase(topic);
     if (this->m_impl->state == Client::Impl::State::CONNECTED)
     {
         this->m_impl->sendUnsubscribe(topic);
@@ -182,9 +235,9 @@ void Client::Impl::connectionStateChange(bool connected)
         // implementation.
 
         // First restore any subscription.
-        for (auto &subscription : this->subscriptions)
+        for (auto &subscription : this->subscription_topics)
         {
-            this->sendSubscribe(subscription.first);
+            this->sendSubscribe(subscription);
         }
         // Flush the publish queue.
         for (auto &message : this->publish_queue)
@@ -233,9 +286,80 @@ void Client::Impl::toPublishQueue(const std::string &topic, const std::string &p
     this->publish_queue.push_back({topic, payload, retain});
 }
 
+void Client::Impl::findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &matching_callbacks, const std::map<std::string, Client::Impl::SubscriptionPart> &subscriptions, std::deque<std::string> &parts)
+{
+    // If we reached the end of the topic, do nothing anymore.
+    if (parts.size() == 0)
+    {
+        return;
+    }
+
+    LOG_TRACE(this, "Finding subscription match for part '" + parts.front() + "'");
+
+    // Find the match based on the part.
+    auto it = subscriptions.find(parts.front());
+    if (it != subscriptions.end())
+    {
+        LOG_TRACE(this, "Found subscription match for part '" + parts.front() + "' with " + std::to_string(it->second.callbacks.size()) + " callbacks");
+
+        matching_callbacks.insert(matching_callbacks.end(), it->second.callbacks.begin(), it->second.callbacks.end());
+
+        std::deque<std::string> remaining_parts(parts.begin() + 1, parts.end());
+        findSubscriptionMatch(matching_callbacks, it->second.children, remaining_parts);
+    }
+
+    // Find the match if this part is a wildcard.
+    it = subscriptions.find("+");
+    if (it != subscriptions.end())
+    {
+        LOG_TRACE(this, "Found subscription match for '+' with " + std::to_string(it->second.callbacks.size()) + " callbacks");
+
+        matching_callbacks.insert(matching_callbacks.end(), it->second.callbacks.begin(), it->second.callbacks.end());
+
+        std::deque<std::string> remaining_parts(parts.begin() + 1, parts.end());
+        findSubscriptionMatch(matching_callbacks, it->second.children, remaining_parts);
+    }
+
+    // Find the match if the remaining is a wildcard.
+    it = subscriptions.find("#");
+    if (it != subscriptions.end())
+    {
+        LOG_TRACE(this, "Found subscription match for '#' with " + std::to_string(it->second.callbacks.size()) + " callbacks");
+
+        matching_callbacks.insert(matching_callbacks.end(), it->second.callbacks.begin(), it->second.callbacks.end());
+        // No more recursion here, as we implicit consume the rest of the parts too.
+    }
+}
+
 void Client::Impl::messageReceived(std::string topic, std::string payload)
 {
     LOG_TRACE(this, "Message received on topic '" + topic + "': " + payload);
 
-    // TODO -- Find which subscriptions match, and call the callbacks.
+    // Split the topic on the / in parts.
+    std::string part;
+    std::stringstream stopic(topic);
+    std::deque<std::string> parts;
+    while (std::getline(stopic, part, '/'))
+    {
+        parts.emplace_back(part);
+    }
+
+    // Find the matching subscription(s) with recursion.
+    std::vector<std::function<void(std::string, std::string)>> matching_callbacks;
+    findSubscriptionMatch(matching_callbacks, subscriptions, parts);
+
+    LOG_TRACE(this, "Found " + std::to_string(matching_callbacks.size()) + " subscription(s) for topic '" + topic + "'");
+
+    if (matching_callbacks.size() == 1)
+    {
+        // For a single callback there is no need to copy the topic/payload.
+        matching_callbacks[0](std::move(topic), std::move(payload));
+    }
+    else
+    {
+        for (auto &callback : matching_callbacks)
+        {
+            callback(topic, payload);
+        }
+    }
 }

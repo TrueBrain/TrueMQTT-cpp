@@ -123,6 +123,29 @@ public:
 
 ssize_t Connection::recv(char *buffer, size_t length)
 {
+    // We idle-check every 100ms if we are requested to stop, as otherwise
+    // this thread will block till the server disconnects us.
+    while (m_state != State::STOP)
+    {
+        // Check if there is any data available on the socket.
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(m_socket, &read_fds);
+        timeval timeout = {0, 100};
+        size_t ret = select(m_socket + 1, &read_fds, nullptr, nullptr, &timeout);
+
+        if (ret == 0)
+        {
+            continue;
+        }
+        break;
+    }
+    if (m_state == State::STOP)
+    {
+        LOG_TRACE(this, "Closing connection as STOP has been requested");
+        return -1;
+    }
+
     ssize_t res = ::recv(m_socket, buffer, length, 0);
     if (res == 0)
     {
@@ -277,6 +300,20 @@ bool Connection::recvLoop()
 
         break;
     }
+    case Packet::PacketType::UNSUBACK:
+    {
+        uint16_t packet_id;
+
+        if (!packet.read_uint16(packet_id))
+        {
+            LOG_ERROR(this, "Malformed packet received, closing connection");
+            return false;
+        }
+
+        LOG_DEBUG(this, "Received UNSUBACK with packet id " + std::to_string(packet_id));
+
+        break;
+    }
     default:
         LOG_ERROR(this, "Received unexpected packet type " + std::string(magic_enum::enum_name(packet_type)) + " from broker, closing connection");
         return false;
@@ -384,4 +421,17 @@ void TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
 void TrueMQTT::Client::Impl::sendUnsubscribe(const std::string &topic)
 {
     LOG_TRACE(this, "Sending unsubscribe message for topic '" + topic + "'");
+
+    Packet packet(Packet::PacketType::UNSUBSCRIBE, 2);
+
+    // By specs, packet-id zero is not allowed.
+    if (packet_id == 0)
+    {
+        packet_id++;
+    }
+
+    packet.write_uint16(packet_id++);
+    packet.write_string(topic);
+
+    connection->send(packet);
 }

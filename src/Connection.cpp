@@ -36,6 +36,8 @@ Connection::Connection(TrueMQTT::Client::LogLevel log_level,
 
 Connection::~Connection()
 {
+    m_state = State::STOP;
+
     // Make sure the connection thread is terminated.
     if (m_thread.joinable())
     {
@@ -90,6 +92,10 @@ void Connection::run()
         {
             if (!recvLoop())
             {
+                if (m_state == State::STOP)
+                {
+                    break;
+                }
                 if (m_socket != INVALID_SOCKET)
                 {
                     closesocket(m_socket);
@@ -100,6 +106,9 @@ void Connection::run()
             }
             break;
         }
+
+        case State::STOP:
+            return;
         }
     }
 }

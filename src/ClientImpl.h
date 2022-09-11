@@ -14,6 +14,7 @@
 #include <deque>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 
@@ -39,6 +40,13 @@ public:
         CONNECTED,    ///< The client is connected to the broker.
     };
 
+    class SubscriptionPart
+    {
+    public:
+        std::map<std::string, SubscriptionPart> children;
+        std::vector<std::function<void(std::string, std::string)>> callbacks;
+    };
+
     void connect();                                                                         ///< Connect to the broker.
     void disconnect();                                                                      ///< Disconnect from the broker.
     void sendPublish(const std::string &topic, const std::string &payload, bool retain);    ///< Send a publish message to the broker.
@@ -46,7 +54,9 @@ public:
     void sendUnsubscribe(const std::string &topic);                                         ///< Send an unsubscribe message to the broker.
     void connectionStateChange(bool connected);                                             ///< Called when a connection goes from CONNECTING state to CONNECTED state or visa versa.
     void toPublishQueue(const std::string &topic, const std::string &payload, bool retain); ///< Add a publish message to the publish queue.
-    void messageReceived(std::string topic, std::string payload);                       ///< Called when a message is received from the broker.
+    void messageReceived(std::string topic, std::string payload);                           ///< Called when a message is received from the broker.
+
+    void findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &callbacks, const std::map<std::string, SubscriptionPart> &subscriptions, std::deque<std::string> &parts); ///< Recursive function to find any matching subscription based on parts.
 
     State state = State::DISCONNECTED; ///< The current state of the client.
     std::mutex state_mutex;            ///< Mutex to protect state changes.
@@ -71,7 +81,8 @@ public:
     size_t publish_queue_size = -1;                                               ///< Size of the publish queue.
     std::deque<std::tuple<std::string, std::string, bool>> publish_queue;         ///< Queue of publish messages to send to the broker.
 
-    std::map<std::string, std::function<void(std::string, std::string)>> subscriptions; ///< Map of active subscriptions.
+    std::set<std::string> subscription_topics;             ///< Flat list of topics the client is subscribed to.
+    std::map<std::string, SubscriptionPart> subscriptions; ///< Tree of active subscriptions build up from the parts on the topic.
 
     std::unique_ptr<Connection> connection; ///< Connection to the broker.
     uint16_t packet_id = 0;                 ///< The next packet ID to use. Will overflow on 65535 to 0.
