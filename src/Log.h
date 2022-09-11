@@ -23,60 +23,65 @@
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_ERROR
 #define LOG_ERROR(obj, x)                                        \
+    do                                                           \
     {                                                            \
         if (obj->log_level >= TrueMQTT::Client::LogLevel::ERROR) \
         {                                                        \
             obj->logger(TrueMQTT::Client::LogLevel::ERROR, x);   \
         }                                                        \
-    }
+    } while (0)
 #else
 #define LOG_ERROR(obj, x)
 #endif
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_WARNING
 #define LOG_WARNING(obj, x)                                        \
+    do                                                             \
     {                                                              \
         if (obj->log_level >= TrueMQTT::Client::LogLevel::WARNING) \
         {                                                          \
             obj->logger(TrueMQTT::Client::LogLevel::WARNING, x);   \
         }                                                          \
-    }
+    } while (0)
 #else
 #define LOG_WARNING(obj, x)
 #endif
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_INFO
 #define LOG_INFO(obj, x)                                        \
+    do                                                          \
     {                                                           \
         if (obj->log_level >= TrueMQTT::Client::LogLevel::INFO) \
         {                                                       \
             obj->logger(TrueMQTT::Client::LogLevel::INFO, x);   \
         }                                                       \
-    }
+    } while (0)
 #else
 #define LOG_INFO(obj, x)
 #endif
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_DEBUG
 #define LOG_DEBUG(obj, x)                                        \
+    do                                                           \
     {                                                            \
         if (obj->log_level >= TrueMQTT::Client::LogLevel::DEBUG) \
         {                                                        \
             obj->logger(TrueMQTT::Client::LogLevel::DEBUG, x);   \
         }                                                        \
-    }
+    } while (0)
 #else
 #define LOG_DEBUG(obj, x)
 #endif
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_TRACE
 #define LOG_TRACE(obj, x)                                        \
+    do                                                           \
     {                                                            \
         if (obj->log_level >= TrueMQTT::Client::LogLevel::TRACE) \
         {                                                        \
             obj->logger(TrueMQTT::Client::LogLevel::TRACE, x);   \
         }                                                        \
-    }
+    } while (0)
 #else
 #define LOG_TRACE(obj, x)
 #endif
