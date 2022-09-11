@@ -163,21 +163,6 @@ void Client::unsubscribe(const std::string &topic)
     }
 }
 
-void Client::Impl::sendPublish(const std::string &topic, const std::string &payload, bool retain)
-{
-    LOG_TRACE(this, "Sending publish message on topic '" + topic + "': " + payload + " (" + (retain ? "retained" : "not retained") + ")");
-}
-
-void Client::Impl::sendSubscribe(const std::string &topic)
-{
-    LOG_TRACE(this, "Sending subscribe message for topic '" + topic + "'");
-}
-
-void Client::Impl::sendUnsubscribe(const std::string &topic)
-{
-    LOG_TRACE(this, "Sending unsubscribe message for topic '" + topic + "'");
-}
-
 void Client::Impl::connectionStateChange(bool connected)
 {
     std::scoped_lock lock(this->state_mutex);
@@ -246,4 +231,11 @@ void Client::Impl::toPublishQueue(const std::string &topic, const std::string &p
 
     LOG_TRACE(this, "Adding message to publish queue");
     this->publish_queue.push_back({topic, payload, retain});
+}
+
+void Client::Impl::messageReceived(std::string &&topic, std::string &&payload)
+{
+    LOG_TRACE(this, "Message received on topic '" + topic + "': " + payload);
+
+    // TODO -- Find which subscriptions match, and call the callbacks.
 }

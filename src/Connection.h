@@ -26,23 +26,33 @@ public:
     Connection(TrueMQTT::Client::LogLevel log_level,
                const std::function<void(TrueMQTT::Client::LogLevel, std::string)> logger,
                const std::function<void(TrueMQTT::Client::Error, std::string)> error_callback,
+               const std::function<void(std::string &&, std::string &&)> publish_callback,
                const std::function<void(bool)> connection_change_callback,
                const std::string &host,
                int port);
     ~Connection();
 
+    void send(class Packet &packet);
+
 private:
+    // Implemented in Connection.cpp
     void run();
     void resolve();
-    bool try_next_address();
+    bool tryNextAddress();
     void connect(addrinfo *address);
-    bool connect_to_any();
-    std::string addrinfo_to_string(addrinfo *address);
+    bool connectToAny();
+    std::string addrinfoToString(addrinfo *address);
+
+    // Implemented in Packet.cpp
+    ssize_t recv(char *buffer, size_t length);
+    bool recvLoop();
+    void sendConnect();
 
     enum class State
     {
         RESOLVING,
         CONNECTING,
+        AUTHENTICATING,
         CONNECTED,
         BACKOFF,
     };
@@ -51,6 +61,7 @@ private:
     const std::function<void(TrueMQTT::Client::LogLevel, std::string)> logger;
 
     const std::function<void(TrueMQTT::Client::Error, std::string)> m_error_callback;
+    const std::function<void(std::string &&, std::string &&)> m_publish_callback;
     const std::function<void(bool)> m_connection_change_callback;
 
     const std::string &m_host; ///< The hostname or IP address to connect to.

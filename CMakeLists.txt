@@ -20,8 +20,13 @@ include(GNUInstallDirs)
 add_library(${PROJECT_NAME}
     src/Client.cpp
     src/Connection.cpp
+    src/Packet.cpp
 )
-target_include_directories(${PROJECT_NAME} PUBLIC include PRIVATE src)
+target_include_directories(${PROJECT_NAME}
+    PUBLIC include
+    PRIVATE src
+    PRIVATE vendor/magic_enum/include
+)
 
 find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)

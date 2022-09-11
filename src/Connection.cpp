@@ -19,12 +19,14 @@
 Connection::Connection(TrueMQTT::Client::LogLevel log_level,
                        const std::function<void(TrueMQTT::Client::LogLevel, std::string)> logger,
                        const std::function<void(TrueMQTT::Client::Error, std::string)> error_callback,
+                       const std::function<void(std::string &&, std::string &&)> publish_callback,
                        const std::function<void(bool)> connection_change_callback,
                        const std::string &host,
                        int port)
     : log_level(log_level),
       logger(std::move(logger)),
       m_error_callback(std::move(error_callback)),
+      m_publish_callback(std::move(publish_callback)),
       m_connection_change_callback(std::move(connection_change_callback)),
       m_host(host),
       m_port(port),
@@ -49,7 +51,7 @@ Connection::~Connection()
     }
 }
 
-std::string Connection::addrinfo_to_string(addrinfo *address)
+std::string Connection::addrinfoToString(addrinfo *address)
 {
     char host[NI_MAXHOST];
     getnameinfo(address->ai_addr, address->ai_addrlen, host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
@@ -68,7 +70,7 @@ void Connection::run()
             break;
 
         case State::CONNECTING:
-            if (!connect_to_any())
+            if (!connectToAny())
             {
                 m_state = State::BACKOFF;
             }
@@ -83,28 +85,19 @@ void Connection::run()
             m_state = State::RESOLVING;
             break;
 
+        case State::AUTHENTICATING:
         case State::CONNECTED:
         {
-            char buf[9000];
-            ssize_t res = recv(m_socket, buf, sizeof(buf), 0);
-
-            if (res == 0)
+            if (!recvLoop())
             {
-                LOG_WARNING(this, "Connection closed by peer");
+                if (m_socket != INVALID_SOCKET)
+                {
+                    closesocket(m_socket);
+                    m_socket = INVALID_SOCKET;
+                }
                 m_state = State::BACKOFF;
                 m_connection_change_callback(false);
             }
-            else if (res < 0)
-            {
-                LOG_WARNING(this, "Connection read error: " + std::string(strerror(errno)));
-                m_state = State::BACKOFF;
-                m_connection_change_callback(false);
-            }
-            else
-            {
-                LOG_TRACE(this, "Received " + std::to_string(res) + " bytes");
-            }
-
             break;
         }
         }
@@ -177,7 +170,7 @@ void Connection::resolve()
         LOG_DEBUG(this, "Resolved hostname '" + m_host + "' to:");
         for (addrinfo *res : m_addresses)
         {
-            LOG_DEBUG(this, "- " + addrinfo_to_string(res));
+            LOG_DEBUG(this, "- " + addrinfoToString(res));
         }
     }
 #endif
@@ -192,12 +185,12 @@ void Connection::resolve()
     m_state = State::CONNECTING;
 }
 
-bool Connection::connect_to_any()
+bool Connection::connectToAny()
 {
     // Check if we have pending attempts. If not, queue a new attempt.
     if (m_sockets.empty())
     {
-        return try_next_address();
+        return tryNextAddress();
     }
 
     // Check for at most 100ms if there is any activity on the sockets.
@@ -231,7 +224,7 @@ bool Connection::connect_to_any()
         }
 
         // Try to queue the next address for a connection.
-        if (try_next_address())
+        if (tryNextAddress())
         {
             return true;
         }
@@ -269,7 +262,7 @@ bool Connection::connect_to_any()
         if (err != 0)
         {
             // It is in error-state: report about it, and remove it.
-            LOG_ERROR(this, "Could not connect to " + addrinfo_to_string(m_socket_to_address[*socket_it]) + ": " + std::string(strerror(err)));
+            LOG_ERROR(this, "Could not connect to " + addrinfoToString(m_socket_to_address[*socket_it]) + ": " + std::string(strerror(err)));
             closesocket(*socket_it);
             m_socket_to_address.erase(*socket_it);
             socket_it = m_sockets.erase(socket_it);
@@ -291,7 +284,7 @@ bool Connection::connect_to_any()
     }
 
     // We have a connected socket.
-    LOG_DEBUG(this, "Connected to " + addrinfo_to_string(m_socket_to_address[socket_connected]));
+    LOG_DEBUG(this, "Connected to " + addrinfoToString(m_socket_to_address[socket_connected]));
 
     // Close all other pending connections.
     for (const auto &socket : m_sockets)
@@ -312,12 +305,12 @@ bool Connection::connect_to_any()
     }
 
     m_socket = socket_connected;
-    m_state = State::CONNECTED;
-    m_connection_change_callback(true);
+    sendConnect();
+    m_state = State::AUTHENTICATING;
     return true;
 }
 
-bool Connection::try_next_address()
+bool Connection::tryNextAddress()
 {
     if (m_address_current >= m_addresses.size())
     {
@@ -356,7 +349,7 @@ void Connection::connect(addrinfo *address)
     }
 
     // Start the actual connection attempt.
-    LOG_DEBUG(this, "Connecting to " + addrinfo_to_string(address));
+    LOG_DEBUG(this, "Connecting to " + addrinfoToString(address));
     int err = ::connect(sock, address->ai_addr, (int)address->ai_addrlen);
     if (err != 0 && errno != EINPROGRESS)
     {
@@ -364,7 +357,7 @@ void Connection::connect(addrinfo *address)
         // else, something is wrong. Report the error and close the socket.
         closesocket(sock);
 
-        LOG_ERROR(this, "Could not connect to " + addrinfo_to_string(address) + ": " + std::string(strerror(errno)));
+        LOG_ERROR(this, "Could not connect to " + addrinfoToString(address) + ": " + std::string(strerror(errno)));
         return;
     }
 
@@ -376,7 +369,10 @@ void Connection::connect(addrinfo *address)
 void TrueMQTT::Client::Impl::connect()
 {
     this->connection = std::make_unique<Connection>(
-        this->log_level, this->logger, this->error_callback, [this](bool connected)
+        this->log_level, this->logger, this->error_callback,
+        [this](std::string &&topic, std::string &&payload)
+        { this->messageReceived(std::move(topic), std::move(payload)); },
+        [this](bool connected)
         { this->connectionStateChange(connected); },
         this->host, this->port);
 }
