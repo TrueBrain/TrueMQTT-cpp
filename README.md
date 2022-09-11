@@ -5,7 +5,7 @@
 ```bash
 mkdir build
 cd build
-make .. -DBUILD_SHARED_LIBS=ON -DMIN_LOGGER_LEVEL=TRACE
+cmake .. -DBUILD_SHARED_LIBS=ON -DMIN_LOGGER_LEVEL=TRACE
 make -j$(nproc)
 
 example/pubsub/truemqtt_pubsub
