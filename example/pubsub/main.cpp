@@ -30,6 +30,10 @@ int main()
                      {
         std::cout << "Received message on exact topic " << topic << ": " << payload << std::endl;
         stop++; });
+    client.subscribe("test/test/test", [&stop](const std::string topic, const std::string payload)
+                     {
+        std::cout << "Received message on exact topic " << topic << ": " << payload << std::endl;
+        stop++; });
     client.subscribe("test/+/test", [&stop](const std::string topic, const std::string payload)
                      {
         std::cout << "Received message on single wildcard topic " << topic << ": " << payload << std::endl;
@@ -48,7 +52,7 @@ int main()
     client.publish("test/test/test", "Hello World!", false);
 
     // Wait till we receive the message back on our subscription.
-    while (stop != 3)
+    while (stop < 4)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }

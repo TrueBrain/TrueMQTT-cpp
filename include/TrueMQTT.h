@@ -233,10 +233,18 @@ namespace TrueMQTT
          * @param topic The topic to subscribe to.
          * @param callback The callback to call when a message arrives on this topic.
          *
-         * @note Subscription can overlap, but you cannot subscribe on the exact same topic twice.
-         * If you do, the callback of the first subscription will be overwritten.
-         * In other words, "a/+" and "a/b" is fine, and callbacks for both subscribes will be
-         * called when something is published on "a/b".
+         * @note Subscription can overlap, even on the exact same topic. All callbacks that
+         * match the topic will be called.
+         * @note Depending on the broker, overlapping subscriptions can trigger one or more
+         * calls to the same callback with the same message. This is because some brokers
+         * send the message to all matching subscriptions, and some only send it to one.
+         * To prevent some callbacks not being called for brokers that do the latter, this
+         * library will call all matching callbacks every time.
+         * Example: If you subscribe to "a/b" and "a/+", and a message arrives on "a/b",
+         * both callbacks will be called. Some brokers will send a single message when
+         * someone publishes to "a/b", and some will send for every subscription matching
+         * (so twice in this case). In the latter case, the callback of both "a/b" and "a/+"
+         * are called twice with the same "a/b" message.
          * @note You cannot subscribe a topic if you are disconnected from the broker. Call
          * \ref connect first.
          * @note This function can stall for a short moment if you publish just at the
