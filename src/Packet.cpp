@@ -40,7 +40,7 @@ public:
     {
     }
 
-    Packet(PacketType packet_type, uint8_t flags, std::vector<uint8_t> &&data)
+    Packet(PacketType packet_type, uint8_t flags, std::vector<uint8_t> data)
         : m_buffer(std::move(data)),
           m_packet_type(packet_type),
           m_flags(flags)
