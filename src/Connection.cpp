@@ -19,7 +19,7 @@
 Connection::Connection(TrueMQTT::Client::LogLevel log_level,
                        const std::function<void(TrueMQTT::Client::LogLevel, std::string)> logger,
                        const std::function<void(TrueMQTT::Client::Error, std::string)> error_callback,
-                       const std::function<void(std::string &&, std::string &&)> publish_callback,
+                       const std::function<void(std::string, std::string)> publish_callback,
                        const std::function<void(bool)> connection_change_callback,
                        const std::string &host,
                        int port)
@@ -370,7 +370,7 @@ void TrueMQTT::Client::Impl::connect()
 {
     this->connection = std::make_unique<Connection>(
         this->log_level, this->logger, this->error_callback,
-        [this](std::string &&topic, std::string &&payload)
+        [this](std::string topic, std::string payload)
         { this->messageReceived(std::move(topic), std::move(payload)); },
         [this](bool connected)
         { this->connectionStateChange(connected); },

@@ -233,7 +233,7 @@ void Client::Impl::toPublishQueue(const std::string &topic, const std::string &p
     this->publish_queue.push_back({topic, payload, retain});
 }
 
-void Client::Impl::messageReceived(std::string &&topic, std::string &&payload)
+void Client::Impl::messageReceived(std::string topic, std::string payload)
 {
     LOG_TRACE(this, "Message received on topic '" + topic + "': " + payload);
 

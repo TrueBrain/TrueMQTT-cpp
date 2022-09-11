@@ -46,7 +46,7 @@ public:
     void sendUnsubscribe(const std::string &topic);                                         ///< Send an unsubscribe message to the broker.
     void connectionStateChange(bool connected);                                             ///< Called when a connection goes from CONNECTING state to CONNECTED state or visa versa.
     void toPublishQueue(const std::string &topic, const std::string &payload, bool retain); ///< Add a publish message to the publish queue.
-    void messageReceived(std::string &&topic, std::string &&payload);                       ///< Called when a message is received from the broker.
+    void messageReceived(std::string topic, std::string payload);                       ///< Called when a message is received from the broker.
 
     State state = State::DISCONNECTED; ///< The current state of the client.
     std::mutex state_mutex;            ///< Mutex to protect state changes.
