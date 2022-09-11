@@ -177,7 +177,7 @@ void Connection::resolve()
     if (this->log_level >= TrueMQTT::Client::LogLevel::DEBUG)
     {
         LOG_DEBUG(this, "Resolved hostname '" + m_host + "' to:");
-        for (addrinfo *res : m_addresses)
+        for (const addrinfo *res : m_addresses)
         {
             LOG_DEBUG(this, "- " + addrinfoToString(res));
         }

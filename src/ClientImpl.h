@@ -68,14 +68,14 @@ public:
     int connection_backoff_max; ///< Maximum time between backoff attempts in seconds.
     int keep_alive_interval;    ///< Interval in seconds between keep-alive messages.
 
-    Client::LogLevel log_level = Client::LogLevel::NONE;                                                                      ///< The log level to use.
-    std::function<void(Client::LogLevel, std::string)> logger = std::move([](Client::LogLevel, std::string) { /* empty */ }); ///< Logger callback.
+    Client::LogLevel log_level = Client::LogLevel::NONE;                                                           ///< The log level to use.
+    std::function<void(Client::LogLevel, std::string)> logger = [](Client::LogLevel, std::string) { /* empty */ }; ///< Logger callback.
 
     std::string last_will_topic = "";   ///< Topic to publish the last will message to.
     std::string last_will_payload = ""; ///< Payload of the last will message.
     bool last_will_retain = false;      ///< Whether to retain the last will message.
 
-    std::function<void(Error, std::string)> error_callback = std::move([](Error, std::string) { /* empty */ }); ///< Error callback.
+    std::function<void(Error, std::string)> error_callback = [](Error, std::string) { /* empty */ }; ///< Error callback.
 
     Client::PublishQueueType publish_queue_type = Client::PublishQueueType::DROP; ///< The type of queue to use for the publish queue.
     size_t publish_queue_size = -1;                                               ///< Size of the publish queue.
