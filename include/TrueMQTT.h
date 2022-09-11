@@ -132,7 +132,7 @@ namespace TrueMQTT
          * @note This library doesn't contain a logger, so you need to provide one.
          * If this method is not called, no logging will be done.
          */
-        void setLogger(LogLevel log_level, std::function<void(LogLevel, std::string)> logger);
+        void setLogger(LogLevel log_level, const std::function<void(LogLevel, std::string)> &logger) const;
 
         /**
          * @brief Set the last will message on the connection.
@@ -143,14 +143,14 @@ namespace TrueMQTT
          *
          * @note Cannot be called after \ref connect.
          */
-        void setLastWill(const std::string &topic, const std::string &payload, bool retain);
+        void setLastWill(const std::string &topic, const std::string &payload, bool retain) const;
 
         /**
          * @brief Set the error callback, called when any error occurs.
          *
          * @param callback The callback to call when an error occurs.
          */
-        void setErrorCallback(std::function<void(Error, std::string)> callback);
+        void setErrorCallback(const std::function<void(Error, std::string)> &callback) const;
 
         /**
          * @brief Set the publish queue to use.
@@ -160,7 +160,7 @@ namespace TrueMQTT
          *
          * @note Cannot be called after \ref connect.
          */
-        void setPublishQueue(PublishQueueType queue_type, size_t size);
+        void setPublishQueue(PublishQueueType queue_type, size_t size) const;
 
         /**
          * @brief Connect to the broker.
@@ -174,7 +174,7 @@ namespace TrueMQTT
          *
          * @note Calling connect twice has no effect.
          */
-        void connect();
+        void connect() const;
 
         /**
          * @brief Disconnect from the broker.
@@ -187,7 +187,7 @@ namespace TrueMQTT
          * moment the connection to the broker is established, and there are messages in the
          * publish queue and/or subscriptions.
          */
-        void disconnect();
+        void disconnect() const;
 
         /**
          * @brief Publish a payload on a topic.
@@ -210,7 +210,7 @@ namespace TrueMQTT
          * moment the connection to the broker is established, and there are messages in the
          * publish queue and/or subscriptions.
          */
-        void publish(const std::string &topic, const std::string &payload, bool retain);
+        void publish(const std::string &topic, const std::string &payload, bool retain) const;
 
         /**
          * @brief Subscribe to a topic, and call the callback function when a message arrives.
@@ -242,7 +242,7 @@ namespace TrueMQTT
          * moment the connection to the broker is established, and there are messages in the
          * publish queue and/or subscriptions.
          */
-        void subscribe(const std::string &topic, std::function<void(std::string, std::string)> callback);
+        void subscribe(const std::string &topic, const std::function<void(std::string, std::string)> &callback) const;
 
         /**
          * @brief Unsubscribe from a topic.
@@ -258,7 +258,7 @@ namespace TrueMQTT
          * moment the connection to the broker is established, and there are messages in the
          * publish queue and/or subscriptions.
          */
-        void unsubscribe(const std::string &topic);
+        void unsubscribe(const std::string &topic) const;
 
     private:
         // Private implementation

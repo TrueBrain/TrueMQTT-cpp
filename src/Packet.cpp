@@ -65,7 +65,7 @@ public:
 
     void write_string(const std::string &str)
     {
-        write_uint16(str.size());
+        write_uint16(static_cast<uint16_t>(str.size()));
         write(str.c_str(), str.size());
     }
 
@@ -121,7 +121,7 @@ public:
     uint8_t m_flags;
 };
 
-ssize_t Connection::recv(char *buffer, size_t length)
+ssize_t Connection::recv(char *buffer, size_t length) const
 {
     // We idle-check every 100ms if we are requested to stop, as otherwise
     // this thread will block till the server disconnects us.
@@ -181,7 +181,7 @@ bool Connection::recvLoop()
         return false;
     }
 
-    Packet::PacketType packet_type = static_cast<Packet::PacketType>(packet_type_raw);
+    auto packet_type = static_cast<Packet::PacketType>(packet_type_raw);
 
     // Read the length of the packet. This is a bit slow to read, as only
     // after reading the byte we know if another byte follows.
@@ -322,7 +322,7 @@ bool Connection::recvLoop()
     return true;
 }
 
-void Connection::send(Packet &packet)
+void Connection::send(Packet &packet) const
 {
     LOG_TRACE(this, "Sending packet of type " + std::string(magic_enum::enum_name(packet.m_packet_type)) + " with flags " + std::to_string(packet.m_flags) + " and length " + std::to_string(packet.m_buffer.size()));
 

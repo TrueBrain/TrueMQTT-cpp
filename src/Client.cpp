@@ -28,7 +28,7 @@ Client::~Client()
     this->disconnect();
 }
 
-void Client::setLogger(Client::LogLevel log_level, std::function<void(Client::LogLevel, std::string)> logger)
+void Client::setLogger(Client::LogLevel log_level, const std::function<void(Client::LogLevel, std::string)> &logger) const
 {
     LOG_TRACE(this->m_impl, "Setting logger to log level " + std::to_string(log_level));
 
@@ -38,7 +38,7 @@ void Client::setLogger(Client::LogLevel log_level, std::function<void(Client::Lo
     LOG_DEBUG(this->m_impl, "Log level now on " + std::to_string(this->m_impl->log_level));
 }
 
-void Client::setLastWill(const std::string &topic, const std::string &payload, bool retain)
+void Client::setLastWill(const std::string &topic, const std::string &payload, bool retain) const
 {
     if (this->m_impl->state != Client::Impl::State::DISCONNECTED)
     {
@@ -53,14 +53,14 @@ void Client::setLastWill(const std::string &topic, const std::string &payload, b
     this->m_impl->last_will_retain = retain;
 }
 
-void Client::setErrorCallback(std::function<void(Error, std::string)> callback)
+void Client::setErrorCallback(const std::function<void(Error, std::string)> &callback) const
 {
     LOG_TRACE(this->m_impl, "Setting error callback");
 
     this->m_impl->error_callback = callback;
 }
 
-void Client::setPublishQueue(Client::PublishQueueType queue_type, size_t size)
+void Client::setPublishQueue(Client::PublishQueueType queue_type, size_t size) const
 {
     if (this->m_impl->state != Client::Impl::State::DISCONNECTED)
     {
@@ -74,7 +74,7 @@ void Client::setPublishQueue(Client::PublishQueueType queue_type, size_t size)
     this->m_impl->publish_queue_size = size;
 }
 
-void Client::connect()
+void Client::connect() const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -89,7 +89,7 @@ void Client::connect()
     this->m_impl->connect();
 }
 
-void Client::disconnect()
+void Client::disconnect() const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -105,7 +105,7 @@ void Client::disconnect()
     this->m_impl->disconnect();
 }
 
-void Client::publish(const std::string &topic, const std::string &payload, bool retain)
+void Client::publish(const std::string &topic, const std::string &payload, bool retain) const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -125,7 +125,7 @@ void Client::publish(const std::string &topic, const std::string &payload, bool 
     }
 }
 
-void Client::subscribe(const std::string &topic, std::function<void(std::string, std::string)> callback)
+void Client::subscribe(const std::string &topic, const std::function<void(std::string, std::string)> &callback) const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -143,10 +143,10 @@ void Client::subscribe(const std::string &topic, std::function<void(std::string,
     std::getline(stopic, part, '/');
 
     // Find the root node, and walk down till we find the leaf node.
-    Client::Impl::SubscriptionPart *subscriptions = &this->m_impl->subscriptions.try_emplace(part, Client::Impl::SubscriptionPart()).first->second;
+    Client::Impl::SubscriptionPart *subscriptions = &this->m_impl->subscriptions.try_emplace(part).first->second;
     while (std::getline(stopic, part, '/'))
     {
-        subscriptions = &subscriptions->children.try_emplace(part, Client::Impl::SubscriptionPart()).first->second;
+        subscriptions = &subscriptions->children.try_emplace(part).first->second;
     }
     // Add the callback to the leaf node.
     subscriptions->callbacks.push_back(callback);
@@ -158,7 +158,7 @@ void Client::subscribe(const std::string &topic, std::function<void(std::string,
     }
 }
 
-void Client::unsubscribe(const std::string &topic)
+void Client::unsubscribe(const std::string &topic) const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -178,11 +178,11 @@ void Client::unsubscribe(const std::string &topic)
     // Find the root node, and walk down till we find the leaf node.
     std::vector<std::tuple<std::string, Client::Impl::SubscriptionPart *>> reverse;
     Client::Impl::SubscriptionPart *subscriptions = &this->m_impl->subscriptions[part];
-    reverse.push_back({part, subscriptions});
+    reverse.emplace_back(part, subscriptions);
     while (std::getline(stopic, part, '/'))
     {
         subscriptions = &subscriptions->children[part];
-        reverse.push_back({part, subscriptions});
+        reverse.emplace_back(part, subscriptions);
     }
     // Clear the callbacks in the leaf node.
     subscriptions->callbacks.clear();
@@ -240,9 +240,9 @@ void Client::Impl::connectionStateChange(bool connected)
             this->sendSubscribe(subscription);
         }
         // Flush the publish queue.
-        for (auto &message : this->publish_queue)
+        for (const auto &[topic, payload, retain] : this->publish_queue)
         {
-            this->sendPublish(std::get<0>(message), std::get<1>(message), std::get<2>(message));
+            this->sendPublish(topic, payload, retain);
         }
         this->publish_queue.clear();
     }
@@ -283,13 +283,13 @@ void Client::Impl::toPublishQueue(const std::string &topic, const std::string &p
     }
 
     LOG_TRACE(this, "Adding message to publish queue");
-    this->publish_queue.push_back({topic, payload, retain});
+    this->publish_queue.emplace_back(topic, payload, retain);
 }
 
 void Client::Impl::findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &matching_callbacks, const std::map<std::string, Client::Impl::SubscriptionPart> &subscriptions, std::deque<std::string> &parts)
 {
     // If we reached the end of the topic, do nothing anymore.
-    if (parts.size() == 0)
+    if (parts.empty())
     {
         return;
     }
@@ -357,7 +357,7 @@ void Client::Impl::messageReceived(std::string topic, std::string payload)
     }
     else
     {
-        for (auto &callback : matching_callbacks)
+        for (const auto &callback : matching_callbacks)
         {
             callback(topic, payload);
         }

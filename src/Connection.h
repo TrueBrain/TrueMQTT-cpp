@@ -24,15 +24,15 @@ class Connection
 {
 public:
     Connection(TrueMQTT::Client::LogLevel log_level,
-               const std::function<void(TrueMQTT::Client::LogLevel, std::string)> logger,
-               const std::function<void(TrueMQTT::Client::Error, std::string)> error_callback,
-               const std::function<void(std::string, std::string)> publish_callback,
-               const std::function<void(bool)> connection_change_callback,
+               const std::function<void(TrueMQTT::Client::LogLevel, std::string)> &logger,
+               const std::function<void(TrueMQTT::Client::Error, std::string)> &error_callback,
+               const std::function<void(std::string, std::string)> &publish_callback,
+               const std::function<void(bool)> &connection_change_callback,
                const std::string &host,
                int port);
     ~Connection();
 
-    void send(class Packet &packet);
+    void send(class Packet &packet) const;
 
 private:
     // Implemented in Connection.cpp
@@ -41,10 +41,10 @@ private:
     bool tryNextAddress();
     void connect(addrinfo *address);
     bool connectToAny();
-    std::string addrinfoToString(addrinfo *address);
+    std::string addrinfoToString(const addrinfo *address) const;
 
     // Implemented in Packet.cpp
-    ssize_t recv(char *buffer, size_t length);
+    ssize_t recv(char *buffer, size_t length) const;
     bool recvLoop();
     void sendConnect();
 
@@ -65,8 +65,8 @@ private:
     const std::function<void(std::string, std::string)> m_publish_callback;
     const std::function<void(bool)> m_connection_change_callback;
 
-    const std::string &m_host; ///< The hostname or IP address to connect to.
-    int m_port;                ///< The port to connect to.
+    const std::string m_host; ///< The hostname or IP address to connect to.
+    int m_port;               ///< The port to connect to.
 
     State m_state = State::RESOLVING;
     std::thread m_thread; ///< Current thread used to run this connection.

@@ -17,10 +17,10 @@
 #include <vector>
 
 Connection::Connection(TrueMQTT::Client::LogLevel log_level,
-                       const std::function<void(TrueMQTT::Client::LogLevel, std::string)> logger,
-                       const std::function<void(TrueMQTT::Client::Error, std::string)> error_callback,
-                       const std::function<void(std::string, std::string)> publish_callback,
-                       const std::function<void(bool)> connection_change_callback,
+                       const std::function<void(TrueMQTT::Client::LogLevel, std::string)> &logger,
+                       const std::function<void(TrueMQTT::Client::Error, std::string)> &error_callback,
+                       const std::function<void(std::string, std::string)> &publish_callback,
+                       const std::function<void(bool)> &connection_change_callback,
                        const std::string &host,
                        int port)
     : log_level(log_level),
@@ -46,17 +46,17 @@ Connection::~Connection()
 
     // freeaddrinfo() is one of those functions that doesn't take kind to NULL pointers
     // on some platforms.
-    if (this->m_host_resolved != NULL)
+    if (this->m_host_resolved != nullptr)
     {
         freeaddrinfo(this->m_host_resolved);
-        this->m_host_resolved = NULL;
+        this->m_host_resolved = nullptr;
     }
 }
 
-std::string Connection::addrinfoToString(addrinfo *address)
+std::string Connection::addrinfoToString(const addrinfo *address) const
 {
     char host[NI_MAXHOST];
-    getnameinfo(address->ai_addr, address->ai_addrlen, host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+    getnameinfo(address->ai_addr, address->ai_addrlen, host, NI_MAXHOST, nullptr, 0, NI_NUMERICHOST);
 
     return std::string(host);
 }
@@ -214,7 +214,7 @@ bool Connection::connectToAny()
         FD_SET(socket, &write_fds);
     }
 
-    int result = select(FD_SETSIZE, NULL, &write_fds, NULL, &timeout);
+    int result = select(FD_SETSIZE, nullptr, &write_fds, nullptr, &timeout);
 
     // Check if there was an error on select(). This is hard to recover from.
     if (result < 0)
