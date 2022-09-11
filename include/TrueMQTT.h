@@ -46,15 +46,6 @@ namespace TrueMQTT
              * @note This error is non-fatal.
              */
             SUBSCRIBE_FAILED,
-
-            /**
-             * @brief The unsubscription failed.
-             *
-             * The topic that failed to unsubscribe is passed as the second argument.
-             *
-             * @note This error is non-fatal.
-             */
-            UNSUBSCRIBE_FAILED,
         };
 
         /**
@@ -255,8 +246,6 @@ namespace TrueMQTT
 
         /**
          * @brief Unsubscribe from a topic.
-         *
-         * If the broker refuses the unsubscribe request, the error-callback is called.
          *
          * @param topic The topic to unsubscribe from.
          *
