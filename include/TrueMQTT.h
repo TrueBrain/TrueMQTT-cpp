@@ -250,6 +250,8 @@ namespace TrueMQTT
          * @param topic The topic to unsubscribe from.
          *
          * @note If you unsubscribe from a topic you were not subscribed too, nothing happens.
+         * @note This unsubscribes all subscriptions on this exact topic. It is not possible
+         * to only unsubscribe from a single subscription on the same exact topic.
          * @note You cannot unsubscribe from a topic if you are disconnected from the broker.
          * Call \ref connect (and \ref subscribe) first.
          * @note This function can stall for a short moment if you publish just at the
