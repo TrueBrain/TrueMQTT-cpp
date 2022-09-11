@@ -1,5 +1,7 @@
 # TrueMQTT - A modern C++ MQTT Client library
 
+This project is currently a Work In Progress, and is not functional.
+
 ## Development
 
 ```bash
