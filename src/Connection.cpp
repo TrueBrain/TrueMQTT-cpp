@@ -125,6 +125,13 @@ void Connection::resolve()
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_ADDRCONFIG;
 
+    // If we resolved previously, free the result.
+    if (this->m_host_resolved != nullptr)
+    {
+        freeaddrinfo(this->m_host_resolved);
+        this->m_host_resolved = nullptr;
+    }
+
     // Request the OS to resolve the hostname into an IP address.
     // We do this even if the hostname is already an IP address, as that
     // makes for far easier code.
