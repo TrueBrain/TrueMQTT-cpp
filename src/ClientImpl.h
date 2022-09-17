@@ -56,34 +56,34 @@ public:
 
     void findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &callbacks, const std::map<std::string, SubscriptionPart> &subscriptions, std::deque<std::string> &parts); ///< Recursive function to find any matching subscription based on parts.
 
-    State state = State::DISCONNECTED; ///< The current state of the client.
-    std::mutex state_mutex;            ///< Mutex to protect state changes.
+    State m_state = State::DISCONNECTED; ///< The current state of the client.
+    std::mutex m_state_mutex;            ///< Mutex to protect state changes.
 
-    std::string host;                                 ///< Host of the broker.
-    int port;                                         ///< Port of the broker.
-    std::string client_id;                            ///< Client ID to use when connecting to the broker.
-    std::chrono::milliseconds connection_timeout;     ///< Timeout in seconds for the connection to the broker.
-    std::chrono::milliseconds connection_backoff;     ///< Backoff time when connection to the broker failed. This is doubled every time a connection fails, up till \ref connection_backoff_max.
-    std::chrono::milliseconds connection_backoff_max; ///< Maximum time between backoff attempts in seconds.
-    std::chrono::milliseconds keep_alive_interval;    ///< Interval in seconds between keep-alive messages.
+    std::string m_host;                                 ///< Host of the broker.
+    int m_port;                                         ///< Port of the broker.
+    std::string m_client_id;                            ///< Client ID to use when connecting to the broker.
+    std::chrono::milliseconds m_connection_timeout;     ///< Timeout in seconds for the connection to the broker.
+    std::chrono::milliseconds m_connection_backoff;     ///< Backoff time when connection to the broker failed. This is doubled every time a connection fails, up till \ref connection_backoff_max.
+    std::chrono::milliseconds m_connection_backoff_max; ///< Maximum time between backoff attempts in seconds.
+    std::chrono::milliseconds m_keep_alive_interval;    ///< Interval in seconds between keep-alive messages.
 
-    Client::LogLevel log_level = Client::LogLevel::NONE;                                                           ///< The log level to use.
-    std::function<void(Client::LogLevel, std::string)> logger = [](Client::LogLevel, std::string) { /* empty */ }; ///< Logger callback.
+    Client::LogLevel m_log_level = Client::LogLevel::NONE;                                                           ///< The log level to use.
+    std::function<void(Client::LogLevel, std::string)> m_logger = [](Client::LogLevel, std::string) { /* empty */ }; ///< Logger callback.
 
-    std::string last_will_topic = "";   ///< Topic to publish the last will message to.
-    std::string last_will_payload = ""; ///< Payload of the last will message.
-    bool last_will_retain = false;      ///< Whether to retain the last will message.
+    std::string m_last_will_topic = "";   ///< Topic to publish the last will message to.
+    std::string m_last_will_payload = ""; ///< Payload of the last will message.
+    bool m_last_will_retain = false;      ///< Whether to retain the last will message.
 
-    std::function<void(Error, std::string)> error_callback = [](Error, std::string) { /* empty */ }; ///< Error callback.
+    std::function<void(Error, std::string)> m_error_callback = [](Error, std::string) { /* empty */ }; ///< Error callback.
 
-    Client::PublishQueueType publish_queue_type = Client::PublishQueueType::DROP; ///< The type of queue to use for the publish queue.
-    size_t publish_queue_size = -1;                                               ///< Size of the publish queue.
-    std::deque<std::tuple<std::string, std::string, bool>> publish_queue;         ///< Queue of publish messages to send to the broker.
+    Client::PublishQueueType m_publish_queue_type = Client::PublishQueueType::DROP; ///< The type of queue to use for the publish queue.
+    size_t m_publish_queue_size = -1;                                               ///< Size of the publish queue.
+    std::deque<std::tuple<std::string, std::string, bool>> m_publish_queue;         ///< Queue of publish messages to send to the broker.
 
-    std::set<std::string> subscription_topics;             ///< Flat list of topics the client is subscribed to.
-    std::map<std::string, SubscriptionPart> subscriptions; ///< Tree of active subscriptions build up from the parts on the topic.
+    std::set<std::string> m_subscription_topics;             ///< Flat list of topics the client is subscribed to.
+    std::map<std::string, SubscriptionPart> m_subscriptions; ///< Tree of active subscriptions build up from the parts on the topic.
 
     class Connection;
-    std::unique_ptr<Connection> connection; ///< Connection to the broker.
-    uint16_t packet_id = 0;                 ///< The next packet ID to use. Will overflow on 65535 to 0.
+    std::unique_ptr<Connection> m_connection; ///< Connection to the broker.
+    uint16_t m_packet_id = 0;                 ///< The next packet ID to use. Will overflow on 65535 to 0.
 };

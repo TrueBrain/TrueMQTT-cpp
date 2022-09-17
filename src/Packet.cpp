@@ -295,7 +295,7 @@ bool TrueMQTT::Client::Impl::Connection::recvLoop()
         {
             LOG_WARNING(&m_impl, "Broker refused our subscription");
             // TODO -- Keep track of the topic per ticket
-            m_impl.error_callback(TrueMQTT::Client::Error::SUBSCRIBE_FAILED, "");
+            m_impl.m_error_callback(TrueMQTT::Client::Error::SUBSCRIBE_FAILED, "");
         }
 
         break;
@@ -396,7 +396,7 @@ void TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::st
     packet.write_string(topic);
     packet.write(payload.c_str(), payload.size());
 
-    connection->send(packet);
+    m_connection->send(packet);
 }
 
 void TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
@@ -406,16 +406,16 @@ void TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
     Packet packet(Packet::PacketType::SUBSCRIBE, 2);
 
     // By specs, packet-id zero is not allowed.
-    if (packet_id == 0)
+    if (m_packet_id == 0)
     {
-        packet_id++;
+        m_packet_id++;
     }
 
-    packet.write_uint16(packet_id++);
+    packet.write_uint16(m_packet_id++);
     packet.write_string(topic);
     packet.write_uint8(0); // QoS
 
-    connection->send(packet);
+    m_connection->send(packet);
 }
 
 void TrueMQTT::Client::Impl::sendUnsubscribe(const std::string &topic)
@@ -425,13 +425,13 @@ void TrueMQTT::Client::Impl::sendUnsubscribe(const std::string &topic)
     Packet packet(Packet::PacketType::UNSUBSCRIBE, 2);
 
     // By specs, packet-id zero is not allowed.
-    if (packet_id == 0)
+    if (m_packet_id == 0)
     {
-        packet_id++;
+        m_packet_id++;
     }
 
-    packet.write_uint16(packet_id++);
+    packet.write_uint16(m_packet_id++);
     packet.write_string(topic);
 
-    connection->send(packet);
+    m_connection->send(packet);
 }

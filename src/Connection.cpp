@@ -19,7 +19,7 @@
 TrueMQTT::Client::Impl::Connection::Connection(Client::Impl &impl)
     : m_impl(impl),
       m_thread(&Connection::run, this),
-      m_backoff(impl.connection_backoff)
+      m_backoff(impl.m_connection_backoff)
 {
 }
 
@@ -35,10 +35,10 @@ TrueMQTT::Client::Impl::Connection::~Connection()
 
     // freeaddrinfo() is one of those functions that doesn't take kind to NULL pointers
     // on some platforms.
-    if (this->m_host_resolved != nullptr)
+    if (m_host_resolved != nullptr)
     {
-        freeaddrinfo(this->m_host_resolved);
-        this->m_host_resolved = nullptr;
+        freeaddrinfo(m_host_resolved);
+        m_host_resolved = nullptr;
     }
 }
 
@@ -74,9 +74,9 @@ void TrueMQTT::Client::Impl::Connection::run()
 
             // Calculate the next backoff time, slowly reducing how often we retry.
             m_backoff *= 2;
-            if (m_backoff > m_impl.connection_backoff_max)
+            if (m_backoff > m_impl.m_connection_backoff_max)
             {
-                m_backoff = m_impl.connection_backoff_max;
+                m_backoff = m_impl.m_connection_backoff_max;
             }
 
             m_state = State::RESOLVING;
@@ -126,19 +126,19 @@ void TrueMQTT::Client::Impl::Connection::resolve()
     hints.ai_flags = AI_ADDRCONFIG;
 
     // If we resolved previously, free the result.
-    if (this->m_host_resolved != nullptr)
+    if (m_host_resolved != nullptr)
     {
-        freeaddrinfo(this->m_host_resolved);
-        this->m_host_resolved = nullptr;
+        freeaddrinfo(m_host_resolved);
+        m_host_resolved = nullptr;
     }
 
     // Request the OS to resolve the hostname into an IP address.
     // We do this even if the hostname is already an IP address, as that
     // makes for far easier code.
-    int error = getaddrinfo(m_impl.host.c_str(), std::to_string(m_impl.port).c_str(), &hints, &m_host_resolved);
+    int error = getaddrinfo(m_impl.m_host.c_str(), std::to_string(m_impl.m_port).c_str(), &hints, &m_host_resolved);
     if (error != 0)
     {
-        m_impl.error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, std::string(gai_strerror(error)));
+        m_impl.m_error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, std::string(gai_strerror(error)));
         return;
     }
 
@@ -146,7 +146,7 @@ void TrueMQTT::Client::Impl::Connection::resolve()
     // IPv6.
     std::deque<addrinfo *> addresses_ipv4;
     std::deque<addrinfo *> addresses_ipv6;
-    for (addrinfo *ai = this->m_host_resolved; ai != nullptr; ai = ai->ai_next)
+    for (addrinfo *ai = m_host_resolved; ai != nullptr; ai = ai->ai_next)
     {
         if (ai->ai_family == AF_INET6)
         {
@@ -181,9 +181,9 @@ void TrueMQTT::Client::Impl::Connection::resolve()
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_DEBUG
     // For debugging, print the addresses we resolved into.
-    if (m_impl.log_level >= TrueMQTT::Client::LogLevel::DEBUG)
+    if (m_impl.m_log_level >= TrueMQTT::Client::LogLevel::DEBUG)
     {
-        LOG_DEBUG(&m_impl, "Resolved hostname '" + m_impl.host + "' to:");
+        LOG_DEBUG(&m_impl, "Resolved hostname '" + m_impl.m_host + "' to:");
         for (const addrinfo *res : m_addresses)
         {
             LOG_DEBUG(&m_impl, "- " + addrinfoToString(res));
@@ -194,7 +194,7 @@ void TrueMQTT::Client::Impl::Connection::resolve()
     // In some odd cases, the list can be empty. This is a fatal error.
     if (m_addresses.empty())
     {
-        m_impl.error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, "");
+        m_impl.m_error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, "");
         return;
     }
 
@@ -255,7 +255,7 @@ bool TrueMQTT::Client::Impl::Connection::connectToAny()
         }
 
         // Check if it is more than the timeout ago since we last tried a connection.
-        if (std::chrono::steady_clock::now() < m_last_attempt + m_impl.connection_timeout)
+        if (std::chrono::steady_clock::now() < m_last_attempt + m_impl.m_connection_timeout)
         {
             return true;
         }
@@ -328,7 +328,7 @@ bool TrueMQTT::Client::Impl::Connection::connectToAny()
         LOG_WARNING(&m_impl, "Could not set socket to non-blocking; expect performance impact");
     }
 
-    m_backoff = m_impl.connection_backoff;
+    m_backoff = m_impl.m_connection_backoff;
     m_socket = socket_connected;
 
     // Only change the state if no disconnect() has been requested in the mean time.
@@ -398,13 +398,13 @@ void TrueMQTT::Client::Impl::Connection::connect(addrinfo *address)
 
 void TrueMQTT::Client::Impl::connect()
 {
-    this->connection = std::make_unique<Connection>(*this);
+    m_connection = std::make_unique<Connection>(*this);
 }
 
 void TrueMQTT::Client::Impl::disconnect()
 {
-    this->subscriptions.clear();
-    this->publish_queue.clear();
+    m_subscriptions.clear();
+    m_publish_queue.clear();
 
-    this->connection.reset();
+    m_connection.reset();
 }
