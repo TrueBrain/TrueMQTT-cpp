@@ -198,7 +198,11 @@ void Connection::resolve()
         return;
     }
 
-    m_state = State::CONNECTING;
+    // Only change the state if no disconnect() has been requested in the mean time.
+    if (m_state != State::STOP)
+    {
+        m_state = State::CONNECTING;
+    }
 }
 
 bool Connection::connectToAny()
@@ -222,6 +226,11 @@ bool Connection::connectToAny()
     }
 
     int result = select(FD_SETSIZE, nullptr, &write_fds, nullptr, &timeout);
+    // As we have waiting a bit, check if no disconnect has been requested.
+    if (m_state == State::STOP)
+    {
+        return true;
+    }
 
     // Check if there was an error on select(). This is hard to recover from.
     if (result < 0)
@@ -320,9 +329,13 @@ bool Connection::connectToAny()
         LOG_WARNING(this, "Could not set socket to non-blocking; expect performance impact");
     }
 
-    m_socket = socket_connected;
-    sendConnect();
-    m_state = State::AUTHENTICATING;
+    // Only change the state if no disconnect() has been requested in the mean time.
+    if (m_state != State::STOP)
+    {
+        m_state = State::AUTHENTICATING;
+        m_socket = socket_connected;
+        sendConnect();
+    }
     return true;
 }
 
