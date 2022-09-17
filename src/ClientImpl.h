@@ -9,8 +9,6 @@
 
 #include "TrueMQTT.h"
 
-#include "Connection.h"
-
 #include <deque>
 #include <map>
 #include <mutex>
@@ -23,15 +21,8 @@
 class TrueMQTT::Client::Impl
 {
 public:
-    Impl(const std::string &host, int port, const std::string &client_id, int connection_timeout, int connection_backoff_max, int keep_alive_interval)
-        : host(host),
-          port(port),
-          client_id(client_id),
-          connection_timeout(connection_timeout),
-          connection_backoff_max(connection_backoff_max),
-          keep_alive_interval(keep_alive_interval)
-    {
-    }
+    Impl(const std::string &host, int port, const std::string &client_id, int connection_timeout, int connection_backoff_max, int keep_alive_interval);
+    ~Impl();
 
     enum State
     {
@@ -84,6 +75,7 @@ public:
     std::set<std::string> subscription_topics;             ///< Flat list of topics the client is subscribed to.
     std::map<std::string, SubscriptionPart> subscriptions; ///< Tree of active subscriptions build up from the parts on the topic.
 
+    class Connection;
     std::unique_ptr<Connection> connection; ///< Connection to the broker.
     uint16_t packet_id = 0;                 ///< The next packet ID to use. Will overflow on 65535 to 0.
 };

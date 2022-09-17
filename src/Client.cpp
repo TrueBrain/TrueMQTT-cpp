@@ -8,27 +8,40 @@
 #include "TrueMQTT.h"
 
 #include "ClientImpl.h"
+#include "Connection.h"
 #include "Log.h"
 
 #include <sstream>
 
-using TrueMQTT::Client;
-
-Client::Client(const std::string &host, int port, const std::string &client_id, int connection_timeout, int connection_backoff_max, int keep_alive_interval)
+TrueMQTT::Client::Client(const std::string &host, int port, const std::string &client_id, int connection_timeout, int connection_backoff_max, int keep_alive_interval)
 {
     this->m_impl = std::make_unique<Client::Impl>(host, port, client_id, connection_timeout, connection_backoff_max, keep_alive_interval);
 
     LOG_TRACE(this->m_impl, "Constructor of client called");
 }
 
-Client::~Client()
+TrueMQTT::Client::~Client()
 {
     LOG_TRACE(this->m_impl, "Destructor of client called");
 
     this->disconnect();
 }
 
-void Client::setLogger(Client::LogLevel log_level, const std::function<void(Client::LogLevel, std::string)> &logger) const
+TrueMQTT::Client::Impl::Impl(const std::string &host, int port, const std::string &client_id, int connection_timeout, int connection_backoff_max, int keep_alive_interval)
+    : host(host),
+      port(port),
+      client_id(client_id),
+      connection_timeout(connection_timeout),
+      connection_backoff_max(connection_backoff_max),
+      keep_alive_interval(keep_alive_interval)
+{
+}
+
+TrueMQTT::Client::Impl::~Impl()
+{
+}
+
+void TrueMQTT::Client::setLogger(Client::LogLevel log_level, const std::function<void(Client::LogLevel, std::string)> &logger) const
 {
     LOG_TRACE(this->m_impl, "Setting logger to log level " + std::to_string(log_level));
 
@@ -38,7 +51,7 @@ void Client::setLogger(Client::LogLevel log_level, const std::function<void(Clie
     LOG_DEBUG(this->m_impl, "Log level now on " + std::to_string(this->m_impl->log_level));
 }
 
-void Client::setLastWill(const std::string &topic, const std::string &payload, bool retain) const
+void TrueMQTT::Client::setLastWill(const std::string &topic, const std::string &payload, bool retain) const
 {
     if (this->m_impl->state != Client::Impl::State::DISCONNECTED)
     {
@@ -53,14 +66,14 @@ void Client::setLastWill(const std::string &topic, const std::string &payload, b
     this->m_impl->last_will_retain = retain;
 }
 
-void Client::setErrorCallback(const std::function<void(Error, std::string)> &callback) const
+void TrueMQTT::Client::setErrorCallback(const std::function<void(Error, std::string)> &callback) const
 {
     LOG_TRACE(this->m_impl, "Setting error callback");
 
     this->m_impl->error_callback = callback;
 }
 
-void Client::setPublishQueue(Client::PublishQueueType queue_type, size_t size) const
+void TrueMQTT::Client::setPublishQueue(Client::PublishQueueType queue_type, size_t size) const
 {
     if (this->m_impl->state != Client::Impl::State::DISCONNECTED)
     {
@@ -74,7 +87,7 @@ void Client::setPublishQueue(Client::PublishQueueType queue_type, size_t size) c
     this->m_impl->publish_queue_size = size;
 }
 
-void Client::connect() const
+void TrueMQTT::Client::connect() const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -89,7 +102,7 @@ void Client::connect() const
     this->m_impl->connect();
 }
 
-void Client::disconnect() const
+void TrueMQTT::Client::disconnect() const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -105,7 +118,7 @@ void Client::disconnect() const
     this->m_impl->disconnect();
 }
 
-void Client::publish(const std::string &topic, const std::string &payload, bool retain) const
+void TrueMQTT::Client::publish(const std::string &topic, const std::string &payload, bool retain) const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -125,7 +138,7 @@ void Client::publish(const std::string &topic, const std::string &payload, bool 
     }
 }
 
-void Client::subscribe(const std::string &topic, const std::function<void(std::string, std::string)> &callback) const
+void TrueMQTT::Client::subscribe(const std::string &topic, const std::function<void(std::string, std::string)> &callback) const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -158,7 +171,7 @@ void Client::subscribe(const std::string &topic, const std::function<void(std::s
     }
 }
 
-void Client::unsubscribe(const std::string &topic) const
+void TrueMQTT::Client::unsubscribe(const std::string &topic) const
 {
     std::scoped_lock lock(this->m_impl->state_mutex);
 
@@ -216,7 +229,7 @@ void Client::unsubscribe(const std::string &topic) const
     }
 }
 
-void Client::Impl::connectionStateChange(bool connected)
+void TrueMQTT::Client::Impl::connectionStateChange(bool connected)
 {
     std::scoped_lock lock(this->state_mutex);
 
@@ -253,7 +266,7 @@ void Client::Impl::connectionStateChange(bool connected)
     }
 }
 
-void Client::Impl::toPublishQueue(const std::string &topic, const std::string &payload, bool retain)
+void TrueMQTT::Client::Impl::toPublishQueue(const std::string &topic, const std::string &payload, bool retain)
 {
     if (this->state != Client::Impl::State::CONNECTING)
     {
@@ -286,7 +299,7 @@ void Client::Impl::toPublishQueue(const std::string &topic, const std::string &p
     this->publish_queue.emplace_back(topic, payload, retain);
 }
 
-void Client::Impl::findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &matching_callbacks, const std::map<std::string, Client::Impl::SubscriptionPart> &subscriptions, std::deque<std::string> &parts)
+void TrueMQTT::Client::Impl::findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &matching_callbacks, const std::map<std::string, Client::Impl::SubscriptionPart> &subscriptions, std::deque<std::string> &parts)
 {
     // If we reached the end of the topic, do nothing anymore.
     if (parts.empty())
@@ -331,7 +344,7 @@ void Client::Impl::findSubscriptionMatch(std::vector<std::function<void(std::str
     }
 }
 
-void Client::Impl::messageReceived(std::string topic, std::string payload)
+void TrueMQTT::Client::Impl::messageReceived(std::string topic, std::string payload)
 {
     LOG_TRACE(this, "Message received on topic '" + topic + "': " + payload);
 

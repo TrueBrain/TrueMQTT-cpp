@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "TrueMQTT.h"
+#include "ClientImpl.h"
 
 #include <string>
 #include <map>
@@ -20,19 +20,15 @@
 #define INVALID_SOCKET -1
 #define closesocket close
 
-class Connection
+class Packet;
+
+class TrueMQTT::Client::Impl::Connection
 {
 public:
-    Connection(TrueMQTT::Client::LogLevel log_level,
-               const std::function<void(TrueMQTT::Client::LogLevel, std::string)> &logger,
-               const std::function<void(TrueMQTT::Client::Error, std::string)> &error_callback,
-               const std::function<void(std::string, std::string)> &publish_callback,
-               const std::function<void(bool)> &connection_change_callback,
-               const std::string &host,
-               int port);
+    Connection(TrueMQTT::Client::Impl &impl);
     ~Connection();
 
-    void send(class Packet &packet) const;
+    void send(Packet &packet) const;
 
 private:
     // Implemented in Connection.cpp
@@ -58,15 +54,7 @@ private:
         STOP,
     };
 
-    TrueMQTT::Client::LogLevel log_level;
-    const std::function<void(TrueMQTT::Client::LogLevel, std::string)> logger;
-
-    const std::function<void(TrueMQTT::Client::Error, std::string)> m_error_callback;
-    const std::function<void(std::string, std::string)> m_publish_callback;
-    const std::function<void(bool)> m_connection_change_callback;
-
-    const std::string m_host; ///< The hostname or IP address to connect to.
-    int m_port;               ///< The port to connect to.
+    TrueMQTT::Client::Impl &m_impl;
 
     State m_state = State::RESOLVING;
     std::thread m_thread; ///< Current thread used to run this connection.

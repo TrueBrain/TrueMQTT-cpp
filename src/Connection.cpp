@@ -16,25 +16,13 @@
 #include <unistd.h>
 #include <vector>
 
-Connection::Connection(TrueMQTT::Client::LogLevel log_level,
-                       const std::function<void(TrueMQTT::Client::LogLevel, std::string)> &logger,
-                       const std::function<void(TrueMQTT::Client::Error, std::string)> &error_callback,
-                       const std::function<void(std::string, std::string)> &publish_callback,
-                       const std::function<void(bool)> &connection_change_callback,
-                       const std::string &host,
-                       int port)
-    : log_level(log_level),
-      logger(std::move(logger)),
-      m_error_callback(std::move(error_callback)),
-      m_publish_callback(std::move(publish_callback)),
-      m_connection_change_callback(std::move(connection_change_callback)),
-      m_host(host),
-      m_port(port),
+TrueMQTT::Client::Impl::Connection::Connection(Client::Impl &impl)
+    : m_impl(impl),
       m_thread(&Connection::run, this)
 {
 }
 
-Connection::~Connection()
+TrueMQTT::Client::Impl::Connection::~Connection()
 {
     m_state = State::STOP;
 
@@ -53,7 +41,7 @@ Connection::~Connection()
     }
 }
 
-std::string Connection::addrinfoToString(const addrinfo *address) const
+std::string TrueMQTT::Client::Impl::Connection::addrinfoToString(const addrinfo *address) const
 {
     char host[NI_MAXHOST];
     getnameinfo(address->ai_addr, address->ai_addrlen, host, NI_MAXHOST, nullptr, 0, NI_NUMERICHOST);
@@ -61,7 +49,7 @@ std::string Connection::addrinfoToString(const addrinfo *address) const
     return std::string(host);
 }
 
-void Connection::run()
+void TrueMQTT::Client::Impl::Connection::run()
 {
     while (true)
     {
@@ -79,7 +67,7 @@ void Connection::run()
             break;
 
         case State::BACKOFF:
-            LOG_WARNING(this, "Connection failed; will retry in NNN seconds");
+            LOG_WARNING(&m_impl, "Connection failed; will retry in NNN seconds");
 
             // TODO: use the configuration
             std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -102,7 +90,7 @@ void Connection::run()
                     m_socket = INVALID_SOCKET;
                 }
                 m_state = State::BACKOFF;
-                m_connection_change_callback(false);
+                m_impl.connectionStateChange(false);
             }
             break;
         }
@@ -113,7 +101,7 @@ void Connection::run()
     }
 }
 
-void Connection::resolve()
+void TrueMQTT::Client::Impl::Connection::resolve()
 {
     m_address_current = 0;
     m_socket = INVALID_SOCKET;
@@ -135,10 +123,10 @@ void Connection::resolve()
     // Request the OS to resolve the hostname into an IP address.
     // We do this even if the hostname is already an IP address, as that
     // makes for far easier code.
-    int error = getaddrinfo(m_host.c_str(), std::to_string(m_port).c_str(), &hints, &m_host_resolved);
+    int error = getaddrinfo(m_impl.host.c_str(), std::to_string(m_impl.port).c_str(), &hints, &m_host_resolved);
     if (error != 0)
     {
-        m_error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, std::string(gai_strerror(error)));
+        m_impl.error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, std::string(gai_strerror(error)));
         return;
     }
 
@@ -181,12 +169,12 @@ void Connection::resolve()
 
 #if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_DEBUG
     // For debugging, print the addresses we resolved into.
-    if (this->log_level >= TrueMQTT::Client::LogLevel::DEBUG)
+    if (m_impl.log_level >= TrueMQTT::Client::LogLevel::DEBUG)
     {
-        LOG_DEBUG(this, "Resolved hostname '" + m_host + "' to:");
+        LOG_DEBUG(&m_impl, "Resolved hostname '" + m_impl.host + "' to:");
         for (const addrinfo *res : m_addresses)
         {
-            LOG_DEBUG(this, "- " + addrinfoToString(res));
+            LOG_DEBUG(&m_impl, "- " + addrinfoToString(res));
         }
     }
 #endif
@@ -194,7 +182,7 @@ void Connection::resolve()
     // In some odd cases, the list can be empty. This is a fatal error.
     if (m_addresses.empty())
     {
-        m_error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, "");
+        m_impl.error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, "");
         return;
     }
 
@@ -205,7 +193,7 @@ void Connection::resolve()
     }
 }
 
-bool Connection::connectToAny()
+bool TrueMQTT::Client::Impl::Connection::connectToAny()
 {
     // Check if we have pending attempts. If not, queue a new attempt.
     if (m_sockets.empty())
@@ -235,7 +223,7 @@ bool Connection::connectToAny()
     // Check if there was an error on select(). This is hard to recover from.
     if (result < 0)
     {
-        LOG_ERROR(this, "select() failed: " + std::string(strerror(errno)));
+        LOG_ERROR(&m_impl, "select() failed: " + std::string(strerror(errno)));
         return true;
     }
 
@@ -261,7 +249,7 @@ bool Connection::connectToAny()
             return true;
         }
 
-        LOG_ERROR(this, "Connection attempt to broker timed out");
+        LOG_ERROR(&m_impl, "Connection attempt to broker timed out");
 
         // Cleanup all sockets.
         for (const auto &socket : m_sockets)
@@ -287,7 +275,7 @@ bool Connection::connectToAny()
         if (err != 0)
         {
             // It is in error-state: report about it, and remove it.
-            LOG_ERROR(this, "Could not connect to " + addrinfoToString(m_socket_to_address[*socket_it]) + ": " + std::string(strerror(err)));
+            LOG_ERROR(&m_impl, "Could not connect to " + addrinfoToString(m_socket_to_address[*socket_it]) + ": " + std::string(strerror(err)));
             closesocket(*socket_it);
             m_socket_to_address.erase(*socket_it);
             socket_it = m_sockets.erase(socket_it);
@@ -309,7 +297,7 @@ bool Connection::connectToAny()
     }
 
     // We have a connected socket.
-    LOG_DEBUG(this, "Connected to " + addrinfoToString(m_socket_to_address[socket_connected]));
+    LOG_DEBUG(&m_impl, "Connected to " + addrinfoToString(m_socket_to_address[socket_connected]));
 
     // Close all other pending connections.
     for (const auto &socket : m_sockets)
@@ -326,7 +314,7 @@ bool Connection::connectToAny()
     int nonblocking = 0;
     if (ioctl(socket_connected, FIONBIO, &nonblocking) != 0)
     {
-        LOG_WARNING(this, "Could not set socket to non-blocking; expect performance impact");
+        LOG_WARNING(&m_impl, "Could not set socket to non-blocking; expect performance impact");
     }
 
     // Only change the state if no disconnect() has been requested in the mean time.
@@ -339,7 +327,7 @@ bool Connection::connectToAny()
     return true;
 }
 
-bool Connection::tryNextAddress()
+bool TrueMQTT::Client::Impl::Connection::tryNextAddress()
 {
     if (m_address_current >= m_addresses.size())
     {
@@ -352,13 +340,13 @@ bool Connection::tryNextAddress()
     return true;
 }
 
-void Connection::connect(addrinfo *address)
+void TrueMQTT::Client::Impl::Connection::connect(addrinfo *address)
 {
     // Create a new socket based on the resolved information.
     SOCKET sock = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
     if (sock == INVALID_SOCKET)
     {
-        LOG_ERROR(this, "Could not create new socket");
+        LOG_ERROR(&m_impl, "Could not create new socket");
         return;
     }
 
@@ -367,18 +355,18 @@ void Connection::connect(addrinfo *address)
     /* The (const char*) cast is needed for Windows */
     if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (const char *)&flags, sizeof(flags)) != 0)
     {
-        LOG_WARNING(this, "Could not set TCP_NODELAY on socket");
+        LOG_WARNING(&m_impl, "Could not set TCP_NODELAY on socket");
     }
     // Set socket to non-blocking; this allows for multiple connects to be pending. This is
     // needed to apply Happy Eyeballs.
     int nonblocking = 1;
     if (ioctl(sock, FIONBIO, &nonblocking) != 0)
     {
-        LOG_WARNING(this, "Could not set socket to non-blocking; expect performance impact");
+        LOG_WARNING(&m_impl, "Could not set socket to non-blocking; expect performance impact");
     }
 
     // Start the actual connection attempt.
-    LOG_DEBUG(this, "Connecting to " + addrinfoToString(address));
+    LOG_DEBUG(&m_impl, "Connecting to " + addrinfoToString(address));
     int err = ::connect(sock, address->ai_addr, (int)address->ai_addrlen);
     if (err != 0 && errno != EINPROGRESS)
     {
@@ -386,7 +374,7 @@ void Connection::connect(addrinfo *address)
         // else, something is wrong. Report the error and close the socket.
         closesocket(sock);
 
-        LOG_ERROR(this, "Could not connect to " + addrinfoToString(address) + ": " + std::string(strerror(errno)));
+        LOG_ERROR(&m_impl, "Could not connect to " + addrinfoToString(address) + ": " + std::string(strerror(errno)));
         return;
     }
 
@@ -397,13 +385,7 @@ void Connection::connect(addrinfo *address)
 
 void TrueMQTT::Client::Impl::connect()
 {
-    this->connection = std::make_unique<Connection>(
-        this->log_level, this->logger, this->error_callback,
-        [this](std::string topic, std::string payload)
-        { this->messageReceived(std::move(topic), std::move(payload)); },
-        [this](bool connected)
-        { this->connectionStateChange(connected); },
-        this->host, this->port);
+    this->connection = std::make_unique<Connection>(*this);
 }
 
 void TrueMQTT::Client::Impl::disconnect()

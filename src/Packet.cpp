@@ -121,7 +121,7 @@ public:
     uint8_t m_flags;
 };
 
-ssize_t Connection::recv(char *buffer, size_t length) const
+ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length) const
 {
     // We idle-check every 100ms if we are requested to stop, as otherwise
     // this thread will block till the server disconnects us.
@@ -142,27 +142,27 @@ ssize_t Connection::recv(char *buffer, size_t length) const
     }
     if (m_state == State::STOP)
     {
-        LOG_TRACE(this, "Closing connection as STOP has been requested");
+        LOG_TRACE(&m_impl, "Closing connection as STOP has been requested");
         return -1;
     }
 
     ssize_t res = ::recv(m_socket, buffer, length, 0);
     if (res == 0)
     {
-        LOG_INFO(this, "Connection closed by peer");
+        LOG_INFO(&m_impl, "Connection closed by peer");
         return -1;
     }
     if (res < 0)
     {
-        LOG_WARNING(this, "Connection read error: " + std::string(strerror(errno)));
+        LOG_WARNING(&m_impl, "Connection read error: " + std::string(strerror(errno)));
         return -1;
     }
 
-    LOG_TRACE(this, "Received " + std::to_string(res) + " bytes");
+    LOG_TRACE(&m_impl, "Received " + std::to_string(res) + " bytes");
     return res;
 }
 
-bool Connection::recvLoop()
+bool TrueMQTT::Client::Impl::Connection::recvLoop()
 {
     uint8_t buffer;
 
@@ -177,7 +177,7 @@ bool Connection::recvLoop()
 
     if (packet_type_raw < 1 || packet_type_raw > 14)
     {
-        LOG_ERROR(this, "Received invalid packet type (" + std::to_string(packet_type_raw) + ") from broker, closing connection");
+        LOG_ERROR(&m_impl, "Received invalid packet type (" + std::to_string(packet_type_raw) + ") from broker, closing connection");
         return false;
     }
 
@@ -203,11 +203,11 @@ bool Connection::recvLoop()
     }
     if ((buffer & 0x80) != 0)
     {
-        LOG_ERROR(this, "Malformed packet length received, closing connection");
+        LOG_ERROR(&m_impl, "Malformed packet length received, closing connection");
         return false;
     }
 
-    LOG_TRACE(this, "Received packet of type " + std::string(magic_enum::enum_name(packet_type)) + " with flags " + std::to_string(flags) + " and length " + std::to_string(remaining_length));
+    LOG_TRACE(&m_impl, "Received packet of type " + std::string(magic_enum::enum_name(packet_type)) + " with flags " + std::to_string(flags) + " and length " + std::to_string(remaining_length));
 
     // Read the rest of the packet.
     std::vector<uint8_t> data;
@@ -235,25 +235,25 @@ bool Connection::recvLoop()
 
         if (!packet.read_uint8(acknowledge))
         {
-            LOG_ERROR(this, "Malformed packet received, closing connection");
+            LOG_ERROR(&m_impl, "Malformed packet received, closing connection");
             return false;
         }
         if (!packet.read_uint8(return_code))
         {
-            LOG_ERROR(this, "Malformed packet received, closing connection");
+            LOG_ERROR(&m_impl, "Malformed packet received, closing connection");
             return false;
         }
 
-        LOG_DEBUG(this, "Received CONNACK with acknowledge " + std::to_string(acknowledge) + " and return code " + std::to_string(return_code));
+        LOG_DEBUG(&m_impl, "Received CONNACK with acknowledge " + std::to_string(acknowledge) + " and return code " + std::to_string(return_code));
 
         if (return_code != 0)
         {
-            LOG_ERROR(this, "Broker actively refused our connection");
+            LOG_ERROR(&m_impl, "Broker actively refused our connection");
             return false;
         }
 
         m_state = State::CONNECTED;
-        m_connection_change_callback(true);
+        m_impl.connectionStateChange(true);
         break;
     }
     case Packet::PacketType::PUBLISH:
@@ -261,16 +261,16 @@ bool Connection::recvLoop()
         std::string topic;
         if (!packet.read_string(topic))
         {
-            LOG_ERROR(this, "Malformed packet received, closing connection");
+            LOG_ERROR(&m_impl, "Malformed packet received, closing connection");
             return false;
         }
 
         std::string payload;
         packet.read_remaining(payload);
 
-        LOG_DEBUG(this, "Received PUBLISH with topic " + topic + ": " + payload);
+        LOG_DEBUG(&m_impl, "Received PUBLISH with topic " + topic + ": " + payload);
 
-        m_publish_callback(std::move(topic), std::move(payload));
+        m_impl.messageReceived(std::move(topic), std::move(payload));
         break;
     }
     case Packet::PacketType::SUBACK:
@@ -280,22 +280,22 @@ bool Connection::recvLoop()
 
         if (!packet.read_uint16(packet_id))
         {
-            LOG_ERROR(this, "Malformed packet received, closing connection");
+            LOG_ERROR(&m_impl, "Malformed packet received, closing connection");
             return false;
         }
         if (!packet.read_uint8(return_code))
         {
-            LOG_ERROR(this, "Malformed packet received, closing connection");
+            LOG_ERROR(&m_impl, "Malformed packet received, closing connection");
             return false;
         }
 
-        LOG_DEBUG(this, "Received SUBACK with packet id " + std::to_string(packet_id) + " and return code " + std::to_string(return_code));
+        LOG_DEBUG(&m_impl, "Received SUBACK with packet id " + std::to_string(packet_id) + " and return code " + std::to_string(return_code));
 
         if (return_code > 2)
         {
-            LOG_WARNING(this, "Broker refused our subscription");
+            LOG_WARNING(&m_impl, "Broker refused our subscription");
             // TODO -- Keep track of the topic per ticket
-            m_error_callback(TrueMQTT::Client::Error::SUBSCRIBE_FAILED, "");
+            m_impl.error_callback(TrueMQTT::Client::Error::SUBSCRIBE_FAILED, "");
         }
 
         break;
@@ -306,25 +306,25 @@ bool Connection::recvLoop()
 
         if (!packet.read_uint16(packet_id))
         {
-            LOG_ERROR(this, "Malformed packet received, closing connection");
+            LOG_ERROR(&m_impl, "Malformed packet received, closing connection");
             return false;
         }
 
-        LOG_DEBUG(this, "Received UNSUBACK with packet id " + std::to_string(packet_id));
+        LOG_DEBUG(&m_impl, "Received UNSUBACK with packet id " + std::to_string(packet_id));
 
         break;
     }
     default:
-        LOG_ERROR(this, "Received unexpected packet type " + std::string(magic_enum::enum_name(packet_type)) + " from broker, closing connection");
+        LOG_ERROR(&m_impl, "Received unexpected packet type " + std::string(magic_enum::enum_name(packet_type)) + " from broker, closing connection");
         return false;
     }
 
     return true;
 }
 
-void Connection::send(Packet &packet) const
+void TrueMQTT::Client::Impl::Connection::send(Packet &packet) const
 {
-    LOG_TRACE(this, "Sending packet of type " + std::string(magic_enum::enum_name(packet.m_packet_type)) + " with flags " + std::to_string(packet.m_flags) + " and length " + std::to_string(packet.m_buffer.size()));
+    LOG_TRACE(&m_impl, "Sending packet of type " + std::string(magic_enum::enum_name(packet.m_packet_type)) + " with flags " + std::to_string(packet.m_flags) + " and length " + std::to_string(packet.m_buffer.size()));
 
     std::vector<uint8_t> buffer;
 
@@ -347,19 +347,19 @@ void Connection::send(Packet &packet) const
     // Write header and packet.
     if (::send(m_socket, (char *)buffer.data(), buffer.size(), MSG_NOSIGNAL) < 0)
     {
-        LOG_WARNING(this, "Connection write error: " + std::string(strerror(errno)));
+        LOG_WARNING(&m_impl, "Connection write error: " + std::string(strerror(errno)));
         return;
     }
     if (::send(m_socket, (char *)packet.m_buffer.data(), packet.m_buffer.size(), MSG_NOSIGNAL) < 0)
     {
-        LOG_WARNING(this, "Connection write error: " + std::string(strerror(errno)));
+        LOG_WARNING(&m_impl, "Connection write error: " + std::string(strerror(errno)));
         return;
     }
 }
 
-void Connection::sendConnect()
+void TrueMQTT::Client::Impl::Connection::sendConnect()
 {
-    LOG_TRACE(this, "Sending CONNECT packet");
+    LOG_TRACE(&m_impl, "Sending CONNECT packet");
 
     static std::string protocol_name("MQTT");
     static std::string client_id("ClientID");
