@@ -9,6 +9,7 @@
 
 #include "TrueMQTT.h"
 
+#include <chrono>
 #include <deque>
 #include <map>
 #include <mutex>
@@ -21,7 +22,13 @@
 class TrueMQTT::Client::Impl
 {
 public:
-    Impl(const std::string &host, int port, const std::string &client_id, int connection_timeout, int connection_backoff_max, int keep_alive_interval);
+    Impl(const std::string &host,
+         int port,
+         const std::string &client_id,
+         std::chrono::milliseconds connection_timeout,
+         std::chrono::milliseconds connection_backoff,
+         std::chrono::milliseconds connection_backoff_max,
+         std::chrono::milliseconds keep_alive_interval);
     ~Impl();
 
     enum State
@@ -52,12 +59,13 @@ public:
     State state = State::DISCONNECTED; ///< The current state of the client.
     std::mutex state_mutex;            ///< Mutex to protect state changes.
 
-    std::string host;           ///< Host of the broker.
-    int port;                   ///< Port of the broker.
-    std::string client_id;      ///< Client ID to use when connecting to the broker.
-    int connection_timeout;     ///< Timeout in seconds for the connection to the broker.
-    int connection_backoff_max; ///< Maximum time between backoff attempts in seconds.
-    int keep_alive_interval;    ///< Interval in seconds between keep-alive messages.
+    std::string host;                                 ///< Host of the broker.
+    int port;                                         ///< Port of the broker.
+    std::string client_id;                            ///< Client ID to use when connecting to the broker.
+    std::chrono::milliseconds connection_timeout;     ///< Timeout in seconds for the connection to the broker.
+    std::chrono::milliseconds connection_backoff;     ///< Backoff time when connection to the broker failed. This is doubled every time a connection fails, up till \ref connection_backoff_max.
+    std::chrono::milliseconds connection_backoff_max; ///< Maximum time between backoff attempts in seconds.
+    std::chrono::milliseconds keep_alive_interval;    ///< Interval in seconds between keep-alive messages.
 
     Client::LogLevel log_level = Client::LogLevel::NONE;                                                           ///< The log level to use.
     std::function<void(Client::LogLevel, std::string)> logger = [](Client::LogLevel, std::string) { /* empty */ }; ///< Logger callback.

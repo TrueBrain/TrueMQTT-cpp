@@ -9,6 +9,7 @@
 
 #include "ClientImpl.h"
 
+#include <chrono>
 #include <string>
 #include <map>
 #include <netdb.h>
@@ -56,14 +57,19 @@ private:
 
     TrueMQTT::Client::Impl &m_impl;
 
-    State m_state = State::RESOLVING;
-    std::thread m_thread; ///< Current thread used to run this connection.
+    State m_state = State::RESOLVING; ///< Current state of the connection.
+    std::thread m_thread;             ///< Current thread used to run this connection.
 
-    addrinfo *m_host_resolved = nullptr;                       ///< Address info of the hostname, once looked up.
-    std::vector<addrinfo *> m_addresses = {};                  ///< List of addresses to try to connect to.
+    std::chrono::milliseconds m_backoff; ///< Current backoff time.
+
+    addrinfo *m_host_resolved = nullptr;      ///< Address info of the hostname, once looked up.
+    std::vector<addrinfo *> m_addresses = {}; ///< List of addresses to try to connect to.
+
     size_t m_address_current = 0;                              ///< Index of the address we are currently trying to connect to.
     std::chrono::steady_clock::time_point m_last_attempt = {}; ///< Time of the last attempt to connect to the current address.
-    std::vector<SOCKET> m_sockets = {};                        ///< List of sockets we are currently trying to connect to.
-    std::map<SOCKET, addrinfo *> m_socket_to_address = {};     ///< Map of sockets to the address they are trying to connect to.
-    SOCKET m_socket = INVALID_SOCKET;                          ///< The socket we are currently connected with, or INVALID_SOCKET if not connected.
+
+    std::vector<SOCKET> m_sockets = {};                    ///< List of sockets we are currently trying to connect to.
+    std::map<SOCKET, addrinfo *> m_socket_to_address = {}; ///< Map of sockets to the address they are trying to connect to.
+
+    SOCKET m_socket = INVALID_SOCKET; ///< The socket we are currently connected with, or INVALID_SOCKET if not connected.
 };

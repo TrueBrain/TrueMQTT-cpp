@@ -13,9 +13,15 @@
 
 #include <sstream>
 
-TrueMQTT::Client::Client(const std::string &host, int port, const std::string &client_id, int connection_timeout, int connection_backoff_max, int keep_alive_interval)
+TrueMQTT::Client::Client(const std::string &host,
+                         int port,
+                         const std::string &client_id,
+                         std::chrono::milliseconds connection_timeout,
+                         std::chrono::milliseconds connection_backoff,
+                         std::chrono::milliseconds connection_backoff_max,
+                         std::chrono::milliseconds keep_alive_interval)
 {
-    this->m_impl = std::make_unique<Client::Impl>(host, port, client_id, connection_timeout, connection_backoff_max, keep_alive_interval);
+    this->m_impl = std::make_unique<Client::Impl>(host, port, client_id, connection_timeout, connection_backoff, connection_backoff_max, keep_alive_interval);
 
     LOG_TRACE(this->m_impl, "Constructor of client called");
 }
@@ -27,11 +33,18 @@ TrueMQTT::Client::~Client()
     this->disconnect();
 }
 
-TrueMQTT::Client::Impl::Impl(const std::string &host, int port, const std::string &client_id, int connection_timeout, int connection_backoff_max, int keep_alive_interval)
+TrueMQTT::Client::Impl::Impl(const std::string &host,
+                             int port,
+                             const std::string &client_id,
+                             std::chrono::milliseconds connection_timeout,
+                             std::chrono::milliseconds connection_backoff,
+                             std::chrono::milliseconds connection_backoff_max,
+                             std::chrono::milliseconds keep_alive_interval)
     : host(host),
       port(port),
       client_id(client_id),
       connection_timeout(connection_timeout),
+      connection_backoff(connection_backoff),
       connection_backoff_max(connection_backoff_max),
       keep_alive_interval(keep_alive_interval)
 {

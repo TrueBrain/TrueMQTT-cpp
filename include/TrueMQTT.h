@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <memory>
 
@@ -111,10 +112,17 @@ namespace TrueMQTT
          * @param port Port of the MQTT broker.
          * @param client_id Client ID to use when connecting to the broker.
          * @param connection_timeout Timeout in seconds for the connection to the broker.
+         * @param connection_backoff Backoff time when connection to the broker failed. This is doubled every time a connection fails, up till \ref connection_backoff_max.
          * @param connection_backoff_max Maximum time between backoff attempts in seconds.
          * @param keep_alive_interval Interval in seconds between keep-alive messages.
          */
-        Client(const std::string &host, int port, const std::string &client_id, int connection_timeout = 5, int connection_backoff_max = 30, int keep_alive_interval = 30);
+        Client(const std::string &host,
+               int port,
+               const std::string &client_id,
+               std::chrono::milliseconds connection_timeout = std::chrono::milliseconds(5000),
+               std::chrono::milliseconds connection_backoff = std::chrono::milliseconds(1000),
+               std::chrono::milliseconds connection_backoff_max = std::chrono::milliseconds(30000),
+               std::chrono::milliseconds keep_alive_interval = std::chrono::milliseconds(30000));
 
         /**
          * @brief Destructor of the MQTT client.

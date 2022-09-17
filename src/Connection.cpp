@@ -18,7 +18,8 @@
 
 TrueMQTT::Client::Impl::Connection::Connection(Client::Impl &impl)
     : m_impl(impl),
-      m_thread(&Connection::run, this)
+      m_thread(&Connection::run, this),
+      m_backoff(impl.connection_backoff)
 {
 }
 
@@ -67,10 +68,16 @@ void TrueMQTT::Client::Impl::Connection::run()
             break;
 
         case State::BACKOFF:
-            LOG_WARNING(&m_impl, "Connection failed; will retry in NNN seconds");
+            LOG_WARNING(&m_impl, "Connection failed; will retry in " + std::to_string(m_backoff.count()) + "ms");
 
-            // TODO: use the configuration
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::this_thread::sleep_for(m_backoff);
+
+            // Calculate the next backoff time, slowly reducing how often we retry.
+            m_backoff *= 2;
+            if (m_backoff > m_impl.connection_backoff_max)
+            {
+                m_backoff = m_impl.connection_backoff_max;
+            }
 
             m_state = State::RESOLVING;
             break;
@@ -96,6 +103,11 @@ void TrueMQTT::Client::Impl::Connection::run()
         }
 
         case State::STOP:
+            if (m_socket != INVALID_SOCKET)
+            {
+                closesocket(m_socket);
+                m_socket = INVALID_SOCKET;
+            }
             return;
         }
     }
@@ -243,8 +255,7 @@ bool TrueMQTT::Client::Impl::Connection::connectToAny()
         }
 
         // Check if it is more than the timeout ago since we last tried a connection.
-        // TODO -- Used to configured value
-        if (std::chrono::steady_clock::now() < m_last_attempt + std::chrono::seconds(10))
+        if (std::chrono::steady_clock::now() < m_last_attempt + m_impl.connection_timeout)
         {
             return true;
         }
@@ -317,11 +328,13 @@ bool TrueMQTT::Client::Impl::Connection::connectToAny()
         LOG_WARNING(&m_impl, "Could not set socket to non-blocking; expect performance impact");
     }
 
+    m_backoff = m_impl.connection_backoff;
+    m_socket = socket_connected;
+
     // Only change the state if no disconnect() has been requested in the mean time.
     if (m_state != State::STOP)
     {
         m_state = State::AUTHENTICATING;
-        m_socket = socket_connected;
         sendConnect();
     }
     return true;
