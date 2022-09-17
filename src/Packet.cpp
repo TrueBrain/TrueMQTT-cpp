@@ -265,12 +265,12 @@ bool TrueMQTT::Client::Impl::Connection::recvLoop()
             return false;
         }
 
-        std::string payload;
-        packet.read_remaining(payload);
+        std::string message;
+        packet.read_remaining(message);
 
-        LOG_DEBUG(&m_impl, "Received PUBLISH with topic " + topic + ": " + payload);
+        LOG_DEBUG(&m_impl, "Received PUBLISH with topic " + topic + ": " + message);
 
-        m_impl.messageReceived(std::move(topic), std::move(payload));
+        m_impl.messageReceived(std::move(topic), std::move(message));
         break;
     }
     case Packet::PacketType::SUBACK:
@@ -366,7 +366,16 @@ void TrueMQTT::Client::Impl::Connection::sendConnect()
 
     uint8_t flags = 0;
     flags |= 1 << 1; // Clean session
-    // TODO -- Support for last-will
+    if (!m_impl.m_last_will_topic.empty())
+    {
+        flags |= 1 << 2; // Last will
+        flags |= 0 << 3; // Last will QoS
+
+        if (m_impl.m_last_will_retain)
+        {
+            flags |= 1 << 5; // Last will retain
+        }
+    }
 
     Packet packet(Packet::PacketType::CONNECT, 0);
 
@@ -377,14 +386,18 @@ void TrueMQTT::Client::Impl::Connection::sendConnect()
     packet.write_uint16(30); // Keep-alive
 
     packet.write_string(client_id); // Client ID
-    // TODO -- Last will topic & message
+    if (!m_impl.m_last_will_topic.empty())
+    {
+        packet.write_string(m_impl.m_last_will_topic);
+        packet.write_string(m_impl.m_last_will_message);
+    }
 
     send(packet);
 }
 
-void TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::string &payload, bool retain)
+void TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::string &message, bool retain)
 {
-    LOG_TRACE(this, "Sending PUBLISH packet to topic '" + topic + "': " + payload + " (" + (retain ? "retained" : "not retained") + ")");
+    LOG_TRACE(this, "Sending PUBLISH packet to topic '" + topic + "': " + message + " (" + (retain ? "retained" : "not retained") + ")");
 
     uint8_t flags = 0;
     flags |= (retain ? 1 : 0) << 0; // Retain
@@ -394,7 +407,7 @@ void TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::st
     Packet packet(Packet::PacketType::PUBLISH, flags);
 
     packet.write_string(topic);
-    packet.write(payload.c_str(), payload.size());
+    packet.write(message.c_str(), message.size());
 
     m_connection->send(packet);
 }

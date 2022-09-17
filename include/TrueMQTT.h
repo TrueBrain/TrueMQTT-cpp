@@ -146,12 +146,12 @@ namespace TrueMQTT
          * @brief Set the last will message on the connection.
          *
          * @param topic The topic to publish the last will message to.
-         * @param payload The payload of the last will message.
+         * @param message The message of the last will message.
          * @param retain Whether to retain the last will message.
          *
          * @note Cannot be called after \ref connect.
          */
-        void setLastWill(const std::string &topic, const std::string &payload, bool retain) const;
+        void setLastWill(const std::string &topic, const std::string &message, bool retain) const;
 
         /**
          * @brief Set the error callback, called when any error occurs.
@@ -198,14 +198,14 @@ namespace TrueMQTT
         void disconnect() const;
 
         /**
-         * @brief Publish a payload on a topic.
+         * @brief Publish a message on a topic.
          *
          * After \ref connect is called, this function will either publish the message
          * immediately (if connected) or queue it for later (if still connecting).
          * In the latter case, it will be published as soon as the connection is established.
          *
-         * @param topic The topic to publish the payload on.
-         * @param payload The payload to publish.
+         * @param topic The topic to publish the message on.
+         * @param message The message to publish.
          * @param retain Whether to retain the message on the broker.
          *
          * @note All messages are always published under QoS 0, and this library supports no
@@ -218,7 +218,7 @@ namespace TrueMQTT
          * moment the connection to the broker is established, and there are messages in the
          * publish queue and/or subscriptions.
          */
-        void publish(const std::string &topic, const std::string &payload, bool retain) const;
+        void publish(const std::string &topic, const std::string &message, bool retain) const;
 
         /**
          * @brief Subscribe to a topic, and call the callback function when a message arrives.

@@ -19,6 +19,7 @@ int main()
     client.setPublishQueue(TrueMQTT::Client::PublishQueueType::FIFO, 10);
     client.setErrorCallback([](TrueMQTT::Client::Error error, std::string message)
                             { std::cout << "Error " << error << ": " << message << std::endl; });
+    client.setLastWill("test/lastwill", "example pubsub finished", true);
 
     client.connect();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));

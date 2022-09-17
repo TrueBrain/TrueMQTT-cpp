@@ -64,7 +64,7 @@ void TrueMQTT::Client::setLogger(Client::LogLevel log_level, const std::function
     LOG_DEBUG(m_impl, "Log level now on " + std::to_string(m_impl->m_log_level));
 }
 
-void TrueMQTT::Client::setLastWill(const std::string &topic, const std::string &payload, bool retain) const
+void TrueMQTT::Client::setLastWill(const std::string &topic, const std::string &message, bool retain) const
 {
     if (m_impl->m_state != Client::Impl::State::DISCONNECTED)
     {
@@ -72,10 +72,10 @@ void TrueMQTT::Client::setLastWill(const std::string &topic, const std::string &
         return;
     }
 
-    LOG_TRACE(m_impl, "Setting last will to topic " + topic + " with payload " + payload + " and retain " + std::to_string(retain));
+    LOG_TRACE(m_impl, "Setting last will to topic " + topic + " with message " + message + " and retain " + std::to_string(retain));
 
     m_impl->m_last_will_topic = topic;
-    m_impl->m_last_will_payload = payload;
+    m_impl->m_last_will_message = message;
     m_impl->m_last_will_retain = retain;
 }
 
@@ -131,11 +131,11 @@ void TrueMQTT::Client::disconnect() const
     m_impl->disconnect();
 }
 
-void TrueMQTT::Client::publish(const std::string &topic, const std::string &payload, bool retain) const
+void TrueMQTT::Client::publish(const std::string &topic, const std::string &message, bool retain) const
 {
     std::scoped_lock lock(m_impl->m_state_mutex);
 
-    LOG_DEBUG(m_impl, "Publishing message on topic '" + topic + "': " + payload + " (" + (retain ? "retained" : "not retained") + ")");
+    LOG_DEBUG(m_impl, "Publishing message on topic '" + topic + "': " + message + " (" + (retain ? "retained" : "not retained") + ")");
 
     switch (m_impl->m_state)
     {
@@ -143,10 +143,10 @@ void TrueMQTT::Client::publish(const std::string &topic, const std::string &payl
         LOG_ERROR(m_impl, "Cannot publish when disconnected");
         return;
     case Client::Impl::State::CONNECTING:
-        m_impl->toPublishQueue(topic, payload, retain);
+        m_impl->toPublishQueue(topic, message, retain);
         return;
     case Client::Impl::State::CONNECTED:
-        m_impl->sendPublish(topic, payload, retain);
+        m_impl->sendPublish(topic, message, retain);
         return;
     }
 }
@@ -266,9 +266,9 @@ void TrueMQTT::Client::Impl::connectionStateChange(bool connected)
             sendSubscribe(subscription);
         }
         // Flush the publish queue.
-        for (const auto &[topic, payload, retain] : m_publish_queue)
+        for (const auto &[topic, message, retain] : m_publish_queue)
         {
-            sendPublish(topic, payload, retain);
+            sendPublish(topic, message, retain);
         }
         m_publish_queue.clear();
     }
@@ -279,7 +279,7 @@ void TrueMQTT::Client::Impl::connectionStateChange(bool connected)
     }
 }
 
-void TrueMQTT::Client::Impl::toPublishQueue(const std::string &topic, const std::string &payload, bool retain)
+void TrueMQTT::Client::Impl::toPublishQueue(const std::string &topic, const std::string &message, bool retain)
 {
     if (m_state != Client::Impl::State::CONNECTING)
     {
@@ -309,7 +309,7 @@ void TrueMQTT::Client::Impl::toPublishQueue(const std::string &topic, const std:
     }
 
     LOG_TRACE(this, "Adding message to publish queue");
-    m_publish_queue.emplace_back(topic, payload, retain);
+    m_publish_queue.emplace_back(topic, message, retain);
 }
 
 void TrueMQTT::Client::Impl::findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &matching_callbacks, const std::map<std::string, Client::Impl::SubscriptionPart> &subscriptions, std::deque<std::string> &parts)
@@ -357,9 +357,9 @@ void TrueMQTT::Client::Impl::findSubscriptionMatch(std::vector<std::function<voi
     }
 }
 
-void TrueMQTT::Client::Impl::messageReceived(std::string topic, std::string payload)
+void TrueMQTT::Client::Impl::messageReceived(std::string topic, std::string message)
 {
-    LOG_TRACE(this, "Message received on topic '" + topic + "': " + payload);
+    LOG_TRACE(this, "Message received on topic '" + topic + "': " + message);
 
     // Split the topic on the / in parts.
     std::string part;
@@ -378,14 +378,14 @@ void TrueMQTT::Client::Impl::messageReceived(std::string topic, std::string payl
 
     if (matching_callbacks.size() == 1)
     {
-        // For a single callback there is no need to copy the topic/payload.
-        matching_callbacks[0](std::move(topic), std::move(payload));
+        // For a single callback there is no need to copy the topic/message.
+        matching_callbacks[0](std::move(topic), std::move(message));
     }
     else
     {
         for (const auto &callback : matching_callbacks)
         {
-            callback(topic, payload);
+            callback(topic, message);
         }
     }
 }
