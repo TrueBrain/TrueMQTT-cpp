@@ -53,3 +53,6 @@ install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} PUBL
 install(FILES ${CMAKE_BINARY_DIR}/truemqtt.pc DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
 
 add_subdirectory(example/pubsub)
+add_subdirectory(example/speedtest/pub)
+add_subdirectory(example/speedtest/sub)
+
