@@ -362,7 +362,6 @@ void TrueMQTT::Client::Impl::Connection::sendConnect()
     LOG_TRACE(&m_impl, "Sending CONNECT packet");
 
     static std::string protocol_name("MQTT");
-    static std::string client_id("ClientID");
 
     uint8_t flags = 0;
     flags |= 1 << 1; // Clean session
@@ -385,7 +384,7 @@ void TrueMQTT::Client::Impl::Connection::sendConnect()
     packet.write_uint8(flags);
     packet.write_uint16(30); // Keep-alive
 
-    packet.write_string(client_id); // Client ID
+    packet.write_string(m_impl.m_client_id);
     if (!m_impl.m_last_will_topic.empty())
     {
         packet.write_string(m_impl.m_last_will_topic);
