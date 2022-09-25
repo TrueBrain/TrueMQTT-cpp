@@ -19,37 +19,37 @@ int main()
     client.setPublishQueue(TrueMQTT::Client::PublishQueueType::FIFO, 10);
     client.setErrorCallback([](TrueMQTT::Client::Error error, std::string message)
                             { std::cout << "Error " << error << ": " << message << std::endl; });
-    client.setLastWill("test/lastwill", "example pubsub finished", true);
+    client.setLastWill("example/pubsub/lastwill", "example pubsub finished", true);
 
     client.connect();
 
     int stop = 0;
 
     // Subscribe to the topic we will be publishing under in a bit.
-    client.subscribe("test/test/test", [&stop](const std::string topic, const std::string payload)
+    client.subscribe("example/pubsub/test/subtest", [&stop](const std::string topic, const std::string payload)
                      {
         std::cout << "Received message on exact topic " << topic << ": " << payload << std::endl;
         stop++; });
-    client.subscribe("test/test/test", [&stop](const std::string topic, const std::string payload)
+    client.subscribe("example/pubsub/test/subtest", [&stop](const std::string topic, const std::string payload)
                      {
         std::cout << "Received message on exact topic " << topic << ": " << payload << std::endl;
         stop++; });
-    client.subscribe("test/+/test", [&stop](const std::string topic, const std::string payload)
+    client.subscribe("example/pubsub/+/subtest", [&stop](const std::string topic, const std::string payload)
                      {
         std::cout << "Received message on single wildcard topic " << topic << ": " << payload << std::endl;
         stop++; });
-    client.subscribe("test/#", [&stop](const std::string topic, const std::string payload)
+    client.subscribe("example/pubsub/test/#", [&stop](const std::string topic, const std::string payload)
                      {
         std::cout << "Received message on multi wildcard topic " << topic << ": " << payload << std::endl;
         stop++; });
-    client.subscribe("test/test/+", [&stop](const std::string topic, const std::string payload)
+    client.subscribe("example/pubsub/test/+", [&stop](const std::string topic, const std::string payload)
                      {
-        /* Never actually called */ });
+        /* Never actually called, as we unsubscribe a bit later */ });
 
-    client.unsubscribe("test/test/+");
+    client.unsubscribe("example/pubsub/test/+");
 
     // Publish a message on the same topic as we subscribed too.
-    client.publish("test/test/test", "Hello World!", false);
+    client.publish("example/pubsub/test/subtest", "Hello World!", false);
 
     // Wait till we receive the message back on our subscription.
     while (stop < 4)
