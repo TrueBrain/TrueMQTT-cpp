@@ -22,7 +22,6 @@ int main()
     client.setLastWill("test/lastwill", "example pubsub finished", true);
 
     client.connect();
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     int stop = 0;
 
