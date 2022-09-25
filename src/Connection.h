@@ -29,7 +29,8 @@ public:
     Connection(TrueMQTT::Client::Impl &impl);
     ~Connection();
 
-    void send(Packet &packet) const;
+    bool send(Packet &packet) const;
+    void socketError();
 
 private:
     // Implemented in Connection.cpp
@@ -43,7 +44,7 @@ private:
     // Implemented in Packet.cpp
     ssize_t recv(char *buffer, size_t length) const;
     bool recvLoop();
-    void sendConnect();
+    bool sendConnect();
 
     enum class State
     {
@@ -52,6 +53,7 @@ private:
         AUTHENTICATING,
         CONNECTED,
         BACKOFF,
+        SOCKET_ERROR,
         STOP,
     };
 

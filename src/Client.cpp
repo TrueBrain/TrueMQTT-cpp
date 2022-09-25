@@ -131,7 +131,7 @@ void TrueMQTT::Client::disconnect() const
     m_impl->disconnect();
 }
 
-void TrueMQTT::Client::publish(const std::string &topic, const std::string &message, bool retain) const
+bool TrueMQTT::Client::publish(const std::string &topic, const std::string &message, bool retain) const
 {
     std::scoped_lock lock(m_impl->m_state_mutex);
 
@@ -141,14 +141,14 @@ void TrueMQTT::Client::publish(const std::string &topic, const std::string &mess
     {
     case Client::Impl::State::DISCONNECTED:
         LOG_ERROR(m_impl, "Cannot publish when disconnected");
-        return;
+        return false;
     case Client::Impl::State::CONNECTING:
-        m_impl->toPublishQueue(topic, message, retain);
-        return;
+        return m_impl->toPublishQueue(topic, message, retain);
     case Client::Impl::State::CONNECTED:
-        m_impl->sendPublish(topic, message, retain);
-        return;
+        return m_impl->sendPublish(topic, message, retain);
     }
+
+    return false;
 }
 
 void TrueMQTT::Client::subscribe(const std::string &topic, const std::function<void(std::string, std::string)> &callback) const
@@ -180,7 +180,12 @@ void TrueMQTT::Client::subscribe(const std::string &topic, const std::function<v
     m_impl->m_subscription_topics.insert(topic);
     if (m_impl->m_state == Client::Impl::State::CONNECTED)
     {
-        m_impl->sendSubscribe(topic);
+        if (!m_impl->sendSubscribe(topic))
+        {
+            LOG_ERROR(m_impl, "Failed to send subscribe message. Closing connection to broker and trying again");
+            m_impl->disconnect();
+            m_impl->connect();
+        }
     }
 }
 
@@ -238,7 +243,12 @@ void TrueMQTT::Client::unsubscribe(const std::string &topic) const
     m_impl->m_subscription_topics.erase(topic);
     if (m_impl->m_state == Client::Impl::State::CONNECTED)
     {
-        m_impl->sendUnsubscribe(topic);
+        if (!m_impl->sendUnsubscribe(topic))
+        {
+            LOG_ERROR(m_impl, "Failed to send subscribe message. Closing connection to broker and trying again");
+            m_impl->disconnect();
+            m_impl->connect();
+        }
     }
 }
 
@@ -263,12 +273,22 @@ void TrueMQTT::Client::Impl::connectionStateChange(bool connected)
         // First restore any subscription.
         for (auto &subscription : m_subscription_topics)
         {
-            sendSubscribe(subscription);
+            if (!sendSubscribe(subscription))
+            {
+                LOG_ERROR(this, "Failed to send subscribe message. Closing connection to broker and trying again");
+                disconnect();
+                connect();
+                return;
+            }
         }
         // Flush the publish queue.
         for (const auto &[topic, message, retain] : m_publish_queue)
         {
-            sendPublish(topic, message, retain);
+            if (!sendPublish(topic, message, retain))
+            {
+                LOG_ERROR(this, "Failed to send queued publish message. Discarding rest of queue");
+                break;
+            }
         }
         m_publish_queue.clear();
     }
@@ -279,19 +299,19 @@ void TrueMQTT::Client::Impl::connectionStateChange(bool connected)
     }
 }
 
-void TrueMQTT::Client::Impl::toPublishQueue(const std::string &topic, const std::string &message, bool retain)
+bool TrueMQTT::Client::Impl::toPublishQueue(const std::string &topic, const std::string &message, bool retain)
 {
     if (m_state != Client::Impl::State::CONNECTING)
     {
         LOG_ERROR(this, "Cannot queue publish message when not connecting");
-        return;
+        return false;
     }
 
     switch (m_publish_queue_type)
     {
     case Client::PublishQueueType::DROP:
         LOG_WARNING(this, "Publish queue is disabled, dropping message");
-        return;
+        return false;
     case Client::PublishQueueType::FIFO:
         if (m_publish_queue.size() >= m_publish_queue_size)
         {
@@ -310,6 +330,7 @@ void TrueMQTT::Client::Impl::toPublishQueue(const std::string &topic, const std:
 
     LOG_TRACE(this, "Adding message to publish queue");
     m_publish_queue.emplace_back(topic, message, retain);
+    return true;
 }
 
 void TrueMQTT::Client::Impl::findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &matching_callbacks, const std::map<std::string, Client::Impl::SubscriptionPart> &subscriptions, std::deque<std::string> &parts)

@@ -91,16 +91,15 @@ void TrueMQTT::Client::Impl::Connection::run()
                 {
                     break;
                 }
-                if (m_socket != INVALID_SOCKET)
-                {
-                    closesocket(m_socket);
-                    m_socket = INVALID_SOCKET;
-                }
-                m_state = State::BACKOFF;
-                m_impl.connectionStateChange(false);
+                socketError();
             }
             break;
         }
+
+        case State::SOCKET_ERROR:
+            m_state = State::BACKOFF;
+            m_impl.connectionStateChange(false);
+            break;
 
         case State::STOP:
             if (m_socket != INVALID_SOCKET)
@@ -110,6 +109,16 @@ void TrueMQTT::Client::Impl::Connection::run()
             }
             return;
         }
+    }
+}
+
+void TrueMQTT::Client::Impl::Connection::socketError()
+{
+    m_state = State::SOCKET_ERROR;
+    if (m_socket != INVALID_SOCKET)
+    {
+        closesocket(m_socket);
+        m_socket = INVALID_SOCKET;
     }
 }
 
@@ -321,22 +330,24 @@ bool TrueMQTT::Client::Impl::Connection::connectToAny()
     m_socket_to_address.clear();
     m_sockets.clear();
 
-    // Disable non-blocking, as we will be reading from a thread, which can be blocking.
-    int nonblocking = 0;
-    if (ioctl(socket_connected, FIONBIO, &nonblocking) != 0)
-    {
-        LOG_WARNING(&m_impl, "Could not set socket to non-blocking; expect performance impact");
-    }
-
-    m_backoff = m_impl.m_connection_backoff;
     m_socket = socket_connected;
 
     // Only change the state if no disconnect() has been requested in the mean time.
     if (m_state != State::STOP)
     {
         m_state = State::AUTHENTICATING;
-        sendConnect();
+        if (!sendConnect())
+        {
+            // We couldn't send the connect packet. That is unusual, so disconnect, and retry.
+            LOG_ERROR(&m_impl, "Could not send first packet to broker. Disconnecting.");
+            closesocket(m_socket);
+            m_socket = INVALID_SOCKET;
+            return false;
+        }
     }
+
+    m_backoff = m_impl.m_connection_backoff;
+
     return true;
 }
 

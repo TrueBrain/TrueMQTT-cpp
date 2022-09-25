@@ -123,16 +123,27 @@ public:
 
 ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length) const
 {
-    // We idle-check every 100ms if we are requested to stop, as otherwise
-    // this thread will block till the server disconnects us.
-    while (m_state != State::STOP)
+    // We idle-check every 10ms if we are requested to stop or if there was
+    // an error. This is to prevent the recv() call from blocking forever.
+    while (true)
     {
         // Check if there is any data available on the socket.
         fd_set read_fds;
         FD_ZERO(&read_fds);
         FD_SET(m_socket, &read_fds);
-        timeval timeout = {0, 100};
+        timeval timeout = {0, 10};
         size_t ret = select(m_socket + 1, &read_fds, nullptr, nullptr, &timeout);
+
+        if (m_state == State::SOCKET_ERROR || m_state == State::STOP)
+        {
+#if MIN_LOGGER_LEVEL >= LOGGER_LEVEL_TRACE
+            if (m_state == State::STOP)
+            {
+                LOG_TRACE(&m_impl, "Closing connection as STOP has been requested");
+            }
+#endif
+            return -1;
+        }
 
         if (ret == 0)
         {
@@ -140,16 +151,11 @@ ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length) co
         }
         break;
     }
-    if (m_state == State::STOP)
-    {
-        LOG_TRACE(&m_impl, "Closing connection as STOP has been requested");
-        return -1;
-    }
 
     ssize_t res = ::recv(m_socket, buffer, length, 0);
     if (res == 0)
     {
-        LOG_INFO(&m_impl, "Connection closed by peer");
+        LOG_WARNING(&m_impl, "Connection closed by broker");
         return -1;
     }
     if (res < 0)
@@ -322,8 +328,20 @@ bool TrueMQTT::Client::Impl::Connection::recvLoop()
     return true;
 }
 
-void TrueMQTT::Client::Impl::Connection::send(Packet &packet) const
+bool TrueMQTT::Client::Impl::Connection::send(Packet &packet) const
 {
+    if (m_state != State::AUTHENTICATING && m_state != State::CONNECTED)
+    {
+        // This happens in the small window the connection thread hasn't
+        // spotted yet the connection is closed, while this function closed
+        // the socket earlier due to the broker closing the connection.
+        // Basically, it can only be caused if the broker actively closes
+        // the connection due to a write while publishing a lot of data
+        // quickly.
+        LOG_DEBUG(&m_impl, "Attempted to send packet while not connected");
+        return false;
+    }
+
     LOG_TRACE(&m_impl, "Sending packet of type " + std::string(magic_enum::enum_name(packet.m_packet_type)) + " with flags " + std::to_string(packet.m_flags) + " and length " + std::to_string(packet.m_buffer.size()));
 
     std::vector<uint8_t> buffer;
@@ -347,17 +365,43 @@ void TrueMQTT::Client::Impl::Connection::send(Packet &packet) const
     // Write header and packet.
     if (::send(m_socket, (char *)buffer.data(), buffer.size(), MSG_NOSIGNAL) < 0)
     {
+        if (errno == EAGAIN)
+        {
+            // sndbuf is full, so we hand it back to the sender to deal with this.
+            return false;
+        }
+        if (errno == ECONNRESET || errno == EPIPE)
+        {
+            LOG_ERROR(&m_impl, "Connection closed by broker");
+            m_impl.m_connection->socketError();
+            return false;
+        }
+
         LOG_WARNING(&m_impl, "Connection write error: " + std::string(strerror(errno)));
-        return;
+        return false;
     }
     if (::send(m_socket, (char *)packet.m_buffer.data(), packet.m_buffer.size(), MSG_NOSIGNAL) < 0)
     {
+        if (errno == EAGAIN)
+        {
+            // sndbuf is full, so we hand it back to the sender to deal with this.
+            return false;
+        }
+        if (errno == ECONNRESET || errno == EPIPE)
+        {
+            LOG_ERROR(&m_impl, "Connection closed by broker");
+            m_impl.m_connection->socketError();
+            return false;
+        }
+
         LOG_WARNING(&m_impl, "Connection write error: " + std::string(strerror(errno)));
-        return;
+        return false;
     }
+
+    return true;
 }
 
-void TrueMQTT::Client::Impl::Connection::sendConnect()
+bool TrueMQTT::Client::Impl::Connection::sendConnect()
 {
     LOG_TRACE(&m_impl, "Sending CONNECT packet");
 
@@ -391,10 +435,10 @@ void TrueMQTT::Client::Impl::Connection::sendConnect()
         packet.write_string(m_impl.m_last_will_message);
     }
 
-    send(packet);
+    return send(packet);
 }
 
-void TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::string &message, bool retain)
+bool TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::string &message, bool retain)
 {
     LOG_TRACE(this, "Sending PUBLISH packet to topic '" + topic + "': " + message + " (" + (retain ? "retained" : "not retained") + ")");
 
@@ -408,10 +452,10 @@ void TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::st
     packet.write_string(topic);
     packet.write(message.c_str(), message.size());
 
-    m_connection->send(packet);
+    return m_connection->send(packet);
 }
 
-void TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
+bool TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
 {
     LOG_TRACE(this, "Sending SUBSCRIBE packet for topic '" + topic + "'");
 
@@ -427,10 +471,10 @@ void TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
     packet.write_string(topic);
     packet.write_uint8(0); // QoS
 
-    m_connection->send(packet);
+    return m_connection->send(packet);
 }
 
-void TrueMQTT::Client::Impl::sendUnsubscribe(const std::string &topic)
+bool TrueMQTT::Client::Impl::sendUnsubscribe(const std::string &topic)
 {
     LOG_TRACE(this, "Sending unsubscribe message for topic '" + topic + "'");
 
@@ -445,5 +489,5 @@ void TrueMQTT::Client::Impl::sendUnsubscribe(const std::string &topic)
     packet.write_uint16(m_packet_id++);
     packet.write_string(topic);
 
-    m_connection->send(packet);
+    return m_connection->send(packet);
 }

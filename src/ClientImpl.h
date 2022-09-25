@@ -47,11 +47,11 @@ public:
 
     void connect();                                                                         ///< Connect to the broker.
     void disconnect();                                                                      ///< Disconnect from the broker.
-    void sendPublish(const std::string &topic, const std::string &message, bool retain);    ///< Send a publish message to the broker.
-    void sendSubscribe(const std::string &topic);                                           ///< Send a subscribe message to the broker.
-    void sendUnsubscribe(const std::string &topic);                                         ///< Send an unsubscribe message to the broker.
+    bool sendPublish(const std::string &topic, const std::string &message, bool retain);    ///< Send a publish message to the broker.
+    bool sendSubscribe(const std::string &topic);                                           ///< Send a subscribe message to the broker.
+    bool sendUnsubscribe(const std::string &topic);                                         ///< Send an unsubscribe message to the broker.
     void connectionStateChange(bool connected);                                             ///< Called when a connection goes from CONNECTING state to CONNECTED state or visa versa.
-    void toPublishQueue(const std::string &topic, const std::string &message, bool retain); ///< Add a publish message to the publish queue.
+    bool toPublishQueue(const std::string &topic, const std::string &message, bool retain); ///< Add a publish message to the publish queue.
     void messageReceived(std::string topic, std::string message);                           ///< Called when a message is received from the broker.
 
     void findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &callbacks, const std::map<std::string, SubscriptionPart> &subscriptions, std::deque<std::string> &parts); ///< Recursive function to find any matching subscription based on parts.

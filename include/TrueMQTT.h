@@ -208,6 +208,8 @@ namespace TrueMQTT
          * @param message The message to publish.
          * @param retain Whether to retain the message on the broker.
          *
+         * @return True iff the publish request is either queued or sent.
+         *
          * @note All messages are always published under QoS 0, and this library supports no
          * other QoS level.
          * @note This call is non-blocking, and it is not possible to know whether the message
@@ -217,8 +219,11 @@ namespace TrueMQTT
          * @note This function can stall for a short moment if you publish just at the
          * moment the connection to the broker is established, and there are messages in the
          * publish queue and/or subscriptions.
+         * @note If the return value is false, but there is a connection with the broker,
+         * this means the sndbuf of the socket is full. It is up to the caller to consider
+         * what to do in this case.
          */
-        void publish(const std::string &topic, const std::string &message, bool retain) const;
+        bool publish(const std::string &topic, const std::string &message, bool retain) const;
 
         /**
          * @brief Subscribe to a topic, and call the callback function when a message arrives.
