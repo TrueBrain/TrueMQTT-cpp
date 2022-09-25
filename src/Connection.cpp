@@ -107,6 +107,12 @@ void TrueMQTT::Client::Impl::Connection::runRead()
         case State::SOCKET_ERROR:
             m_state = State::BACKOFF;
             m_impl.connectionStateChange(false);
+
+            // Clear send-queue, as we can't send anything anymore.
+            {
+                std::scoped_lock lock(m_send_queue_mutex);
+                m_send_queue.clear();
+            }
             break;
 
         case State::STOP:
@@ -166,7 +172,7 @@ void TrueMQTT::Client::Impl::Connection::runWrite()
 
         default:
             // Sleep for a bit to avoid hogging the CPU.
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             break;
         }
     }

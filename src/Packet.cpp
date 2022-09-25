@@ -362,7 +362,7 @@ bool TrueMQTT::Client::Impl::Connection::sendConnect()
         packet.write_string(m_impl.m_last_will_message);
     }
 
-    return send(std::move(packet));
+    return send(std::move(packet), true);
 }
 
 bool TrueMQTT::Client::Impl::Connection::sendPingRequest()
