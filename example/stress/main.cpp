@@ -30,7 +30,7 @@ int main()
     int64_t totalLatency = 0;
 
     // Subscribe to the topic we are going to stress test.
-    client.subscribe("test/test/test", [&received, &totalLatency](const std::string topic, const std::string payload)
+    client.subscribe("example/stress/+", [&received, &totalLatency](const std::string topic, const std::string payload)
                      {
         // Calculate the latency.
         auto now = std::chrono::steady_clock::now();
@@ -47,13 +47,17 @@ int main()
     // means.
     bool is_failing = true;
     auto start = std::chrono::steady_clock::now();
+    int channel = 0;
     while (true)
     {
         auto now = std::chrono::steady_clock::now();
         auto now_ms = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
 
-        // Publish the current time, so we can check the latency.
-        if (!client.publish("test/test/test", std::to_string(now_ms), false))
+        // Publish the current time, so we can check the latency. We distribute
+        // it over multiple topics, to give brokers a chance to distrubte the
+        // load on their side.
+        channel = (channel + 1) % 10;
+        if (!client.publish("example/stress/" + std::to_string(channel), std::to_string(now_ms), false))
         {
             failed++;
         }
@@ -68,6 +72,10 @@ int main()
             if (received != 0)
             {
                 std::cout << "Sent: " << sent << "/s - Received: " << received << "/s - Failed: " << failed << "/s - Avg Latency: " << (totalLatency / received) << "us" << std::endl;
+            }
+            else
+            {
+                std::cout << "Sent: " << sent << "/s - Received: " << received << "/s - Failed: " << failed << "/s " << std::endl;
             }
             sent = 0;
             received = 0;
