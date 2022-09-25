@@ -8,10 +8,15 @@
 #pragma once
 
 #include "ClientImpl.h"
+#include "Packet.h"
 
 #include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <optional>
 #include <string>
 #include <map>
+#include <mutex>
 #include <netdb.h>
 #include <thread>
 #include <vector>
@@ -21,30 +26,31 @@
 #define INVALID_SOCKET -1
 #define closesocket close
 
-class Packet;
-
 class TrueMQTT::Client::Impl::Connection
 {
 public:
     Connection(TrueMQTT::Client::Impl &impl);
     ~Connection();
 
-    bool send(Packet &packet) const;
+    bool send(Packet packet);
     void socketError();
 
 private:
     // Implemented in Connection.cpp
-    void run();
+    void runRead();
+    void runWrite();
     void resolve();
     bool tryNextAddress();
     void connect(addrinfo *address);
     bool connectToAny();
     std::string addrinfoToString(const addrinfo *address) const;
+    std::optional<Packet> popSendQueueBlocking();
 
     // Implemented in Packet.cpp
     ssize_t recv(char *buffer, size_t length) const;
     bool recvLoop();
     bool sendConnect();
+    void sendPacket(Packet &packet) const;
 
     enum class State
     {
@@ -60,7 +66,8 @@ private:
     TrueMQTT::Client::Impl &m_impl;
 
     State m_state = State::RESOLVING; ///< Current state of the connection.
-    std::thread m_thread;             ///< Current thread used to run this connection.
+    std::thread m_thread_read;        ///< Current read thread used to run this connection.
+    std::thread m_thread_write;       ///< Current write thread used to run this connection.
 
     std::chrono::milliseconds m_backoff; ///< Current backoff time.
 
@@ -74,4 +81,8 @@ private:
     std::map<SOCKET, addrinfo *> m_socket_to_address = {}; ///< Map of sockets to the address they are trying to connect to.
 
     SOCKET m_socket = INVALID_SOCKET; ///< The socket we are currently connected with, or INVALID_SOCKET if not connected.
+
+    std::deque<Packet> m_send_queue = {};    ///< Queue of packets to send to the broker.
+    std::mutex m_send_queue_mutex;           ///< Mutex to protect the send queue.
+    std::condition_variable m_send_queue_cv; ///< Condition variable to wake up the write thread when the send queue is not empty.
 };

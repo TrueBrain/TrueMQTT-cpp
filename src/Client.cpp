@@ -100,6 +100,19 @@ void TrueMQTT::Client::setPublishQueue(Client::PublishQueueType queue_type, size
     m_impl->m_publish_queue_size = size;
 }
 
+void TrueMQTT::Client::setSendQueue(size_t size) const
+{
+    if (m_impl->m_state != Client::Impl::State::DISCONNECTED)
+    {
+        LOG_ERROR(m_impl, "Cannot set send queue when not disconnected");
+        return;
+    }
+
+    LOG_TRACE(m_impl, "Setting send queue to size " + std::to_string(size));
+
+    m_impl->m_send_queue_size = size;
+}
+
 void TrueMQTT::Client::connect() const
 {
     std::scoped_lock lock(m_impl->m_state_mutex);

@@ -8,124 +8,11 @@
 #include "ClientImpl.h"
 #include "Connection.h"
 #include "Log.h"
+#include "Packet.h"
 
 #include "magic_enum.hpp"
 
 #include <string.h>
-
-class Packet
-{
-public:
-    enum class PacketType
-    {
-        CONNECT = 1,
-        CONNACK = 2,
-        PUBLISH = 3,
-        PUBACK = 4,
-        PUBREC = 5,
-        PUBREL = 6,
-        PUBCOMP = 7,
-        SUBSCRIBE = 8,
-        SUBACK = 9,
-        UNSUBSCRIBE = 10,
-        UNSUBACK = 11,
-        PINGREQ = 12,
-        PINGRESP = 13,
-        DISCONNECT = 14,
-    };
-
-    Packet(PacketType packet_type, uint8_t flags)
-        : m_packet_type(packet_type),
-          m_flags(flags)
-    {
-        // Reserve space for the header.
-        m_buffer.push_back(0); // Packet type and flags.
-        m_buffer.push_back(0); // Remaining length (at most 4 bytes).
-        m_buffer.push_back(0);
-        m_buffer.push_back(0);
-        m_buffer.push_back(0);
-    }
-
-    Packet(PacketType packet_type, uint8_t flags, std::vector<uint8_t> data)
-        : m_buffer(std::move(data)),
-          m_packet_type(packet_type),
-          m_flags(flags)
-    {
-    }
-
-    void write_uint8(uint8_t value)
-    {
-        m_buffer.push_back(value);
-    }
-
-    void write_uint16(uint16_t value)
-    {
-        m_buffer.push_back(value >> 8);
-        m_buffer.push_back(value & 0xFF);
-    }
-
-    void write(const char *data, size_t length)
-    {
-        m_buffer.insert(m_buffer.end(), data, data + length);
-    }
-
-    void write_string(const std::string &str)
-    {
-        write_uint16(static_cast<uint16_t>(str.size()));
-        write(str.c_str(), str.size());
-    }
-
-    bool read_uint8(uint8_t &value)
-    {
-        if (m_buffer.size() < m_read_offset + 1)
-        {
-            return false;
-        }
-        value = m_buffer[m_read_offset++];
-        return true;
-    }
-
-    bool read_uint16(uint16_t &value)
-    {
-        if (m_buffer.size() < m_read_offset + 2)
-        {
-            return false;
-        }
-        value = m_buffer[m_read_offset++] << 8;
-        value |= m_buffer[m_read_offset++];
-        return true;
-    }
-
-    bool read_string(std::string &str)
-    {
-        uint16_t length;
-        if (!read_uint16(length))
-        {
-            return false;
-        }
-        if (m_buffer.size() < m_read_offset + length)
-        {
-            return false;
-        }
-        const char *data = reinterpret_cast<const char *>(m_buffer.data()) + m_read_offset;
-        str.assign(data, length);
-        m_read_offset += length;
-        return true;
-    }
-
-    void read_remaining(std::string &str)
-    {
-        const char *data = reinterpret_cast<const char *>(m_buffer.data()) + m_read_offset;
-        str.assign(data, m_buffer.size() - m_read_offset);
-        m_read_offset = m_buffer.size();
-    }
-
-    std::vector<uint8_t> m_buffer;
-    size_t m_read_offset = 0;
-
-    PacketType m_packet_type;
-    uint8_t m_flags;
-};
 
 ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length) const
 {
@@ -334,28 +221,20 @@ bool TrueMQTT::Client::Impl::Connection::recvLoop()
     return true;
 }
 
-bool TrueMQTT::Client::Impl::Connection::send(Packet &packet) const
+bool TrueMQTT::Client::Impl::Connection::send(Packet packet)
 {
-    if (m_state != State::AUTHENTICATING && m_state != State::CONNECTED)
+    // Push back if the internal queue gets too big.
+    if (m_send_queue.size() > m_impl.m_send_queue_size)
     {
-        // This happens in the small window the connection thread hasn't
-        // spotted yet the connection is closed, while this function closed
-        // the socket earlier due to the broker closing the connection.
-        // Basically, it can only be caused if the broker actively closes
-        // the connection due to a write while publishing a lot of data
-        // quickly.
-        LOG_DEBUG(&m_impl, "Attempted to send packet while not connected");
         return false;
     }
-
-    LOG_TRACE(&m_impl, "Sending packet of type " + std::string(magic_enum::enum_name(packet.m_packet_type)) + " with flags " + std::to_string(packet.m_flags) + " and length " + std::to_string(packet.m_buffer.size()));
 
     // Calculate where in the header we need to start writing, to create
     // a contiguous buffer. The buffer size is including the header, but
     // the length should be without. Hence the minus five.
     size_t length = packet.m_buffer.size() - 5;
     size_t offset = length <= 127 ? 3 : (length <= 16383 ? 2 : (length <= 2097151 ? 1 : 0));
-    size_t bufferOffset = offset;
+    packet.m_write_offset = offset;
 
     // Set the header.
     packet.m_buffer[offset++] = (static_cast<uint8_t>(packet.m_packet_type) << 4) | packet.m_flags;
@@ -372,40 +251,45 @@ bool TrueMQTT::Client::Impl::Connection::send(Packet &packet) const
         packet.m_buffer[offset++] = byte;
     } while (length > 0);
 
-    ssize_t res = ::send(m_socket, (char *)packet.m_buffer.data() + bufferOffset, packet.m_buffer.size() - bufferOffset, MSG_NOSIGNAL);
-    // If the first packet is rejected in full, return this to the caller.
-    if (res < 0)
+    // Add the packet to the queue.
     {
-        if (errno == EAGAIN)
-        {
-            // sndbuf is full, so we hand it back to the sender to deal with this.
-            return false;
-        }
-
-        LOG_ERROR(&m_impl, "Connection write error: " + std::string(strerror(errno)));
-        m_impl.m_connection->socketError();
-        return false;
+        std::scoped_lock lock(m_send_queue_mutex);
+        m_send_queue.push_back(std::move(packet));
     }
-    // If we still have data to send for this packet, keep trying to send the data till we succeed.
-    bufferOffset += res;
-    while (bufferOffset < packet.m_buffer.size())
-    {
-        res = ::send(m_socket, (char *)packet.m_buffer.data() + bufferOffset, packet.m_buffer.size() - bufferOffset, MSG_NOSIGNAL);
-        if (res < 0)
-        {
-            if (errno == EAGAIN)
-            {
-                continue;
-            }
-
-            LOG_ERROR(&m_impl, "Connection write error: " + std::string(strerror(errno)));
-            m_impl.m_connection->socketError();
-            return false;
-        }
-        bufferOffset += res;
-    }
+    // Notify the write thread that there is a new packet.
+    m_send_queue_cv.notify_one();
 
     return true;
+}
+
+void TrueMQTT::Client::Impl::Connection::sendPacket(Packet &packet) const
+{
+    if (m_state != State::AUTHENTICATING && m_state != State::CONNECTED)
+    {
+        // This happens in the small window the connection thread hasn't
+        // spotted yet the connection is closed, while this function closed
+        // the socket earlier due to the broker closing the connection.
+        // Basically, it can only be caused if the broker actively closes
+        // the connection due to a write while publishing a lot of data
+        // quickly.
+        LOG_DEBUG(&m_impl, "Attempted to send packet while not connected");
+        return;
+    }
+
+    LOG_TRACE(&m_impl, "Sending packet of type " + std::string(magic_enum::enum_name(packet.m_packet_type)) + " with flags " + std::to_string(packet.m_flags) + " and length " + std::to_string(packet.m_buffer.size() - 5));
+
+    // Send the packet to the broker.
+    while (packet.m_write_offset < packet.m_buffer.size())
+    {
+        ssize_t res = ::send(m_socket, (char *)packet.m_buffer.data() + packet.m_write_offset, packet.m_buffer.size() - packet.m_write_offset, MSG_NOSIGNAL);
+        if (res < 0)
+        {
+            LOG_ERROR(&m_impl, "Connection write error: " + std::string(strerror(errno)));
+            m_impl.m_connection->socketError();
+            return;
+        }
+        packet.m_write_offset += res;
+    }
 }
 
 bool TrueMQTT::Client::Impl::Connection::sendConnect()
@@ -442,7 +326,7 @@ bool TrueMQTT::Client::Impl::Connection::sendConnect()
         packet.write_string(m_impl.m_last_will_message);
     }
 
-    return send(packet);
+    return send(std::move(packet));
 }
 
 bool TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::string &message, bool retain)
@@ -459,7 +343,7 @@ bool TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::st
     packet.write_string(topic);
     packet.write(message.c_str(), message.size());
 
-    return m_connection->send(packet);
+    return m_connection->send(std::move(packet));
 }
 
 bool TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
@@ -478,7 +362,7 @@ bool TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
     packet.write_string(topic);
     packet.write_uint8(0); // QoS
 
-    return m_connection->send(packet);
+    return m_connection->send(std::move(packet));
 }
 
 bool TrueMQTT::Client::Impl::sendUnsubscribe(const std::string &topic)
@@ -496,5 +380,5 @@ bool TrueMQTT::Client::Impl::sendUnsubscribe(const std::string &topic)
     packet.write_uint16(m_packet_id++);
     packet.write_string(topic);
 
-    return m_connection->send(packet);
+    return m_connection->send(std::move(packet));
 }

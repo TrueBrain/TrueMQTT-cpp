@@ -18,7 +18,8 @@
 
 TrueMQTT::Client::Impl::Connection::Connection(Client::Impl &impl)
     : m_impl(impl),
-      m_thread(&Connection::run, this),
+      m_thread_read(&Connection::runRead, this),
+      m_thread_write(&Connection::runWrite, this),
       m_backoff(impl.m_connection_backoff)
 {
 }
@@ -26,11 +27,16 @@ TrueMQTT::Client::Impl::Connection::Connection(Client::Impl &impl)
 TrueMQTT::Client::Impl::Connection::~Connection()
 {
     m_state = State::STOP;
+    m_send_queue_cv.notify_one();
 
     // Make sure the connection thread is terminated.
-    if (m_thread.joinable())
+    if (m_thread_read.joinable())
     {
-        m_thread.join();
+        m_thread_read.join();
+    }
+    if (m_thread_write.joinable())
+    {
+        m_thread_write.join();
     }
 
     // freeaddrinfo() is one of those functions that doesn't take kind to NULL pointers
@@ -50,7 +56,7 @@ std::string TrueMQTT::Client::Impl::Connection::addrinfoToString(const addrinfo 
     return std::string(host);
 }
 
-void TrueMQTT::Client::Impl::Connection::run()
+void TrueMQTT::Client::Impl::Connection::runRead()
 {
     while (true)
     {
@@ -108,6 +114,58 @@ void TrueMQTT::Client::Impl::Connection::run()
                 m_socket = INVALID_SOCKET;
             }
             return;
+        }
+    }
+}
+
+std::optional<Packet> TrueMQTT::Client::Impl::Connection::popSendQueueBlocking()
+{
+    std::unique_lock<std::mutex> lock(m_send_queue_mutex);
+    if (!m_send_queue.empty())
+    {
+        auto packet = m_send_queue.front();
+        m_send_queue.pop_front();
+        return packet;
+    }
+
+    m_send_queue_cv.wait(lock, [this]
+                         { return !m_send_queue.empty() || m_state == State::STOP; });
+
+    if (m_state == State::STOP)
+    {
+        return {};
+    }
+
+    Packet packet = m_send_queue.front();
+    m_send_queue.pop_front();
+    return packet;
+}
+
+void TrueMQTT::Client::Impl::Connection::runWrite()
+{
+    while (true)
+    {
+        switch (m_state)
+        {
+        case State::AUTHENTICATING:
+        case State::CONNECTED:
+        {
+            auto packet = popSendQueueBlocking();
+            if (!packet)
+            {
+                break;
+            }
+            sendPacket(packet.value());
+            break;
+        }
+
+        case State::STOP:
+            return;
+
+        default:
+            // Sleep for a bit to avoid hogging the CPU.
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            break;
         }
     }
 }
@@ -329,6 +387,13 @@ bool TrueMQTT::Client::Impl::Connection::connectToAny()
     }
     m_socket_to_address.clear();
     m_sockets.clear();
+
+    // Disable non-blocking, as we will be reading/writing from a thread, which can be blocking.
+    int nonblocking = 0;
+    if (ioctl(socket_connected, FIONBIO, &nonblocking) != 0)
+    {
+        LOG_WARNING(&m_impl, "Could not set socket to non-blocking; expect performance impact");
+    }
 
     m_socket = socket_connected;
 

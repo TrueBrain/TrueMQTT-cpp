@@ -134,6 +134,8 @@ namespace TrueMQTT
         /**
          * @brief Set the logger callback and level.
          *
+         * By default no logger is set.
+         *
          * @param log_level The \ref LogLevel to use for logging.
          * @param logger The callback to call when a log message is generated.
          *
@@ -144,6 +146,8 @@ namespace TrueMQTT
 
         /**
          * @brief Set the last will message on the connection.
+         *
+         * By default no last will is set.
          *
          * @param topic The topic to publish the last will message to.
          * @param message The message of the last will message.
@@ -163,12 +167,31 @@ namespace TrueMQTT
         /**
          * @brief Set the publish queue to use.
          *
+         * The default is DROP.
+         *
          * @param queue_type The \ref PublishQueueType to use for the publish queue.
          * @param size The size of the queue. If the queue is full, the type of queue defines what happens.
          *
          * @note Cannot be called after \ref connect.
          */
         void setPublishQueue(PublishQueueType queue_type, size_t size) const;
+
+        /**
+         * @brief Set the size of the send queue.
+         *
+         * The send queue is used to transfer MQTT packets from the main thread to the
+         * network thread. This queue is used to prevent the main thread from blocking
+         * when sending a lot of data.
+         *
+         * Setting the queue too big will cause the memory usage to increase, while
+         * setting it too small will cause functions like \ref publish to return false,
+         * as the queue is full.
+         *
+         * The default is 1000.
+         *
+         * @param size Size of the send queue.
+         */
+        void setSendQueue(size_t size) const;
 
         /**
          * @brief Connect to the broker.
@@ -220,8 +243,9 @@ namespace TrueMQTT
          * moment the connection to the broker is established, and there are messages in the
          * publish queue and/or subscriptions.
          * @note If the return value is false, but there is a connection with the broker,
-         * this means the sndbuf of the socket is full. It is up to the caller to consider
-         * what to do in this case.
+         * this means the send queue is full. It is up to the caller to consider what to do
+         * in this case, but it is wise to back off for a while before sending something
+         * again.
          */
         bool publish(const std::string &topic, const std::string &message, bool retain) const;
 

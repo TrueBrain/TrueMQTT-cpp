@@ -80,6 +80,8 @@ public:
     size_t m_publish_queue_size = -1;                                               ///< Size of the publish queue.
     std::deque<std::tuple<std::string, std::string, bool>> m_publish_queue;         ///< Queue of publish messages to send to the broker.
 
+    size_t m_send_queue_size = 1000; ///< Size of the send queue.
+
     std::set<std::string> m_subscription_topics;             ///< Flat list of topics the client is subscribed to.
     std::map<std::string, SubscriptionPart> m_subscriptions; ///< Tree of active subscriptions build up from the parts on the topic.
 
