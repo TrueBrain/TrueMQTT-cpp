@@ -1,16 +1,13 @@
-name: Build
+name: Code quality
 
 on:
   push:
     branches:
     - main
-  pull_request:
-    branches:
-    - main
 
 jobs:
-  build:
-    name: Build
+  code_quality:
+    name: Code quality
     runs-on: ubuntu-latest
 
     env:
