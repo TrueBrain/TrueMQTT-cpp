@@ -14,7 +14,7 @@ int main()
     // Create a connection to the local broker.
     TrueMQTT::Client client("localhost", 1883, "test");
 
-    client.setLogger(TrueMQTT::Client::LogLevel::TRACE, [](TrueMQTT::Client::LogLevel level, std::string message)
+    client.setLogger(TrueMQTT::Client::LogLevel::WARNING, [](TrueMQTT::Client::LogLevel level, std::string message)
                      { std::cout << "Log " << level << ": " << message << std::endl; });
     client.setPublishQueue(TrueMQTT::Client::PublishQueueType::FIFO, 10);
     client.setErrorCallback([](TrueMQTT::Client::Error error, std::string message)
