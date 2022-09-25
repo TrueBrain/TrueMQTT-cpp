@@ -283,9 +283,7 @@ bool TrueMQTT::Client::Impl::Connection::connectToAny()
     }
 
     // Check for at most 100ms if there is any activity on the sockets.
-    timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100;
+    timeval timeout = {0, 100 * 1000};
 
     fd_set write_fds;
     FD_ZERO(&write_fds);

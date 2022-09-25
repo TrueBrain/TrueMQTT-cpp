@@ -16,7 +16,7 @@
 
 ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length) const
 {
-    // We idle-check every 10ms if we are requested to stop or if there was
+    // We idle-check every 100ms if we are requested to stop or if there was
     // an error. This is to prevent the recv() call from blocking forever.
     while (true)
     {
@@ -24,7 +24,7 @@ ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length) co
         fd_set read_fds;
         FD_ZERO(&read_fds);
         FD_SET(m_socket, &read_fds);
-        timeval timeout = {0, 10};
+        timeval timeout = {0, 100 * 1000};
         size_t ret = select(m_socket + 1, &read_fds, nullptr, nullptr, &timeout);
 
         if (m_state == State::SOCKET_ERROR || m_state == State::STOP)
