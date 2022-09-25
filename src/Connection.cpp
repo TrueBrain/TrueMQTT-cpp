@@ -396,6 +396,8 @@ bool TrueMQTT::Client::Impl::Connection::connectToAny()
     }
 
     m_socket = socket_connected;
+    m_last_sent_packet = std::chrono::steady_clock::now();
+    m_last_received_packet = std::chrono::steady_clock::now();
 
     // Only change the state if no disconnect() has been requested in the mean time.
     if (m_state != State::STOP)

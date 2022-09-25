@@ -32,7 +32,7 @@ public:
     Connection(TrueMQTT::Client::Impl &impl);
     ~Connection();
 
-    bool send(Packet packet);
+    bool send(Packet packet, bool has_priority = false);
     void socketError();
 
 private:
@@ -47,10 +47,11 @@ private:
     std::optional<Packet> popSendQueueBlocking();
 
     // Implemented in Packet.cpp
-    ssize_t recv(char *buffer, size_t length) const;
+    ssize_t recv(char *buffer, size_t length);
     bool recvLoop();
     bool sendConnect();
-    void sendPacket(Packet &packet) const;
+    bool sendPingRequest();
+    void sendPacket(Packet &packet);
 
     enum class State
     {
@@ -85,4 +86,7 @@ private:
     std::deque<Packet> m_send_queue = {};    ///< Queue of packets to send to the broker.
     std::mutex m_send_queue_mutex;           ///< Mutex to protect the send queue.
     std::condition_variable m_send_queue_cv; ///< Condition variable to wake up the write thread when the send queue is not empty.
+
+    std::chrono::steady_clock::time_point m_last_sent_packet = {}; ///< Time of the last packet sent to the broker.
+    std::chrono::steady_clock::time_point m_last_received_packet = {}; ///< Time of the last packet received from the broker.
 };

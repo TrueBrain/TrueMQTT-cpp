@@ -14,7 +14,7 @@
 
 #include <string.h>
 
-ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length) const
+ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length)
 {
     // We idle-check every 100ms if we are requested to stop or if there was
     // an error. This is to prevent the recv() call from blocking forever.
@@ -35,6 +35,26 @@ ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length) co
                 LOG_TRACE(&m_impl, "Closing connection as STOP has been requested");
             }
 #endif
+            return -1;
+        }
+
+        auto now = std::chrono::steady_clock::now();
+
+        // Send a keep-alive to the broker if we haven't sent anything for a while.
+        if (m_last_sent_packet + m_impl.m_keep_alive_interval < now)
+        {
+            // Force updating the time, as it might be a while before the ping actually leaves
+            // the send queue. And we don't need to send more than one for the whole interval.
+            m_last_sent_packet = std::chrono::steady_clock::now();
+            sendPingRequest();
+        }
+
+        // As the broker should send a ping every keep-alive interval, we really should
+        // see something no later than every 1.5 times the keep-alive interval. If not,
+        // we assume the connection is dead.
+        if (m_last_received_packet + m_impl.m_keep_alive_interval * 15 / 10 < now)
+        {
+            LOG_ERROR(&m_impl, "Connection timed out");
             return -1;
         }
 
@@ -213,18 +233,24 @@ bool TrueMQTT::Client::Impl::Connection::recvLoop()
 
         break;
     }
+    case Packet::PacketType::PINGRESP:
+    {
+        LOG_DEBUG(&m_impl, "Received PINGRESP");
+        break;
+    }
     default:
         LOG_ERROR(&m_impl, "Received unexpected packet type " + std::string(magic_enum::enum_name(packet_type)) + " from broker, closing connection");
         return false;
     }
 
+    m_last_received_packet = std::chrono::steady_clock::now();
     return true;
 }
 
-bool TrueMQTT::Client::Impl::Connection::send(Packet packet)
+bool TrueMQTT::Client::Impl::Connection::send(Packet packet, bool has_priority)
 {
     // Push back if the internal queue gets too big.
-    if (m_send_queue.size() > m_impl.m_send_queue_size)
+    if (!has_priority && m_send_queue.size() > m_impl.m_send_queue_size)
     {
         return false;
     }
@@ -254,7 +280,15 @@ bool TrueMQTT::Client::Impl::Connection::send(Packet packet)
     // Add the packet to the queue.
     {
         std::scoped_lock lock(m_send_queue_mutex);
-        m_send_queue.push_back(std::move(packet));
+        if (has_priority)
+        {
+            m_send_queue.push_front(std::move(packet));
+        }
+        else
+        {
+            m_send_queue.push_back(std::move(packet));
+        }
+
     }
     // Notify the write thread that there is a new packet.
     m_send_queue_cv.notify_one();
@@ -262,7 +296,7 @@ bool TrueMQTT::Client::Impl::Connection::send(Packet packet)
     return true;
 }
 
-void TrueMQTT::Client::Impl::Connection::sendPacket(Packet &packet) const
+void TrueMQTT::Client::Impl::Connection::sendPacket(Packet &packet)
 {
     if (m_state != State::AUTHENTICATING && m_state != State::CONNECTED)
     {
@@ -290,6 +324,8 @@ void TrueMQTT::Client::Impl::Connection::sendPacket(Packet &packet) const
         }
         packet.m_write_offset += res;
     }
+
+    m_last_sent_packet = std::chrono::steady_clock::now();
 }
 
 bool TrueMQTT::Client::Impl::Connection::sendConnect()
@@ -327,6 +363,15 @@ bool TrueMQTT::Client::Impl::Connection::sendConnect()
     }
 
     return send(std::move(packet));
+}
+
+bool TrueMQTT::Client::Impl::Connection::sendPingRequest()
+{
+    LOG_TRACE(&m_impl, "Sending PINGREQ packet");
+
+    Packet packet(Packet::PacketType::PINGREQ, 0);
+
+    return send(std::move(packet), true);
 }
 
 bool TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::string &message, bool retain)
