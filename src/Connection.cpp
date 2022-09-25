@@ -22,6 +22,8 @@ TrueMQTT::Client::Impl::Connection::Connection(Client::Impl &impl)
       m_thread_write(&Connection::runWrite, this),
       m_backoff(impl.m_connection_backoff)
 {
+    pthread_setname_np(m_thread_read.native_handle(), "TrueMQTT::Read");
+    pthread_setname_np(m_thread_write.native_handle(), "TrueMQTT::Write");
 }
 
 TrueMQTT::Client::Impl::Connection::~Connection()
