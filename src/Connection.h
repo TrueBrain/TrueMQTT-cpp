@@ -87,6 +87,6 @@ private:
     std::mutex m_send_queue_mutex;           ///< Mutex to protect the send queue.
     std::condition_variable m_send_queue_cv; ///< Condition variable to wake up the write thread when the send queue is not empty.
 
-    std::chrono::steady_clock::time_point m_last_sent_packet = {}; ///< Time of the last packet sent to the broker.
+    std::chrono::steady_clock::time_point m_last_sent_packet = {};     ///< Time of the last packet sent to the broker.
     std::chrono::steady_clock::time_point m_last_received_packet = {}; ///< Time of the last packet received from the broker.
 };
