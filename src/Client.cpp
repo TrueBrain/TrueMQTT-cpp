@@ -13,9 +13,9 @@
 
 #include <sstream>
 
-TrueMQTT::Client::Client(const std::string &host,
+TrueMQTT::Client::Client(const std::string_view host,
                          int port,
-                         const std::string &client_id,
+                         const std::string_view client_id,
                          std::chrono::milliseconds connection_timeout,
                          std::chrono::milliseconds connection_backoff,
                          std::chrono::milliseconds connection_backoff_max,
@@ -33,9 +33,9 @@ TrueMQTT::Client::~Client()
     disconnect();
 }
 
-TrueMQTT::Client::Impl::Impl(const std::string &host,
+TrueMQTT::Client::Impl::Impl(const std::string_view host,
                              int port,
-                             const std::string &client_id,
+                             const std::string_view client_id,
                              std::chrono::milliseconds connection_timeout,
                              std::chrono::milliseconds connection_backoff,
                              std::chrono::milliseconds connection_backoff_max,
@@ -54,7 +54,7 @@ TrueMQTT::Client::Impl::~Impl()
 {
 }
 
-void TrueMQTT::Client::setLogger(Client::LogLevel log_level, const std::function<void(Client::LogLevel, std::string)> &logger) const
+void TrueMQTT::Client::setLogger(Client::LogLevel log_level, const std::function<void(Client::LogLevel, std::string_view)> &logger) const
 {
     LOG_TRACE(m_impl, "Setting logger to log level " + std::to_string(log_level));
 
@@ -64,7 +64,7 @@ void TrueMQTT::Client::setLogger(Client::LogLevel log_level, const std::function
     LOG_DEBUG(m_impl, "Log level now on " + std::to_string(m_impl->m_log_level));
 }
 
-void TrueMQTT::Client::setLastWill(const std::string &topic, const std::string &message, bool retain) const
+void TrueMQTT::Client::setLastWill(const std::string_view topic, const std::string_view message, bool retain) const
 {
     if (m_impl->m_state != Client::Impl::State::DISCONNECTED)
     {
@@ -72,14 +72,14 @@ void TrueMQTT::Client::setLastWill(const std::string &topic, const std::string &
         return;
     }
 
-    LOG_TRACE(m_impl, "Setting last will to topic " + topic + " with message " + message + " and retain " + std::to_string(retain));
+    LOG_TRACE(m_impl, "Setting last will to topic " + std::string(topic) + " with message " + std::string(message) + " and retain " + std::to_string(retain));
 
     m_impl->m_last_will_topic = topic;
     m_impl->m_last_will_message = message;
     m_impl->m_last_will_retain = retain;
 }
 
-void TrueMQTT::Client::setErrorCallback(const std::function<void(Error, std::string)> &callback) const
+void TrueMQTT::Client::setErrorCallback(const std::function<void(Error, std::string_view)> &callback) const
 {
     LOG_TRACE(m_impl, "Setting error callback");
 
@@ -144,11 +144,11 @@ void TrueMQTT::Client::disconnect() const
     m_impl->disconnect();
 }
 
-bool TrueMQTT::Client::publish(const std::string &topic, const std::string &message, bool retain) const
+bool TrueMQTT::Client::publish(const std::string_view topic, const std::string_view message, bool retain) const
 {
     std::scoped_lock lock(m_impl->m_state_mutex);
 
-    LOG_DEBUG(m_impl, "Publishing message on topic '" + topic + "': " + message + " (" + (retain ? "retained" : "not retained") + ")");
+    LOG_DEBUG(m_impl, "Publishing message on topic '" + std::string(topic) + "': " + std::string(message) + " (" + (retain ? "retained" : "not retained") + ")");
 
     switch (m_impl->m_state)
     {
@@ -164,7 +164,7 @@ bool TrueMQTT::Client::publish(const std::string &topic, const std::string &mess
     return false;
 }
 
-void TrueMQTT::Client::subscribe(const std::string &topic, const std::function<void(std::string, std::string)> &callback) const
+void TrueMQTT::Client::subscribe(const std::string_view topic, const std::function<void(std::string_view, std::string_view)> &callback) const
 {
     std::scoped_lock lock(m_impl->m_state_mutex);
 
@@ -174,23 +174,44 @@ void TrueMQTT::Client::subscribe(const std::string &topic, const std::function<v
         return;
     }
 
-    LOG_DEBUG(m_impl, "Subscribing to topic '" + topic + "'");
+    LOG_DEBUG(m_impl, "Subscribing to topic '" + std::string(topic) + "'");
 
-    // Split the topic on /, to find each part.
-    std::string part;
-    std::stringstream stopic(topic);
-    std::getline(stopic, part, '/');
-
-    // Find the root node, and walk down till we find the leaf node.
-    Client::Impl::SubscriptionPart *subscriptions = &m_impl->m_subscriptions.try_emplace(part).first->second;
-    while (std::getline(stopic, part, '/'))
+    // Find where in the tree the callback for this subscription should be added.
+    Client::Impl::SubscriptionPart *subscriptions = nullptr;
+    std::string_view topic_search = topic;
+    while (true)
     {
-        subscriptions = &subscriptions->children.try_emplace(part).first->second;
+        std::string_view part = topic_search;
+
+        // Find the next part of the topic.
+        auto pos = topic_search.find('/');
+        if (pos != std::string_view::npos)
+        {
+            part = topic_search.substr(0, pos);
+            topic_search.remove_prefix(pos + 1);
+        }
+
+        // Find the next subscription in the tree.
+        if (subscriptions == nullptr)
+        {
+            subscriptions = &m_impl->m_subscriptions.try_emplace(std::string(part)).first->second;
+        }
+        else
+        {
+            subscriptions = &subscriptions->children.try_emplace(std::string(part)).first->second;
+        }
+
+        // If this was the last element, we're done.
+        if (pos == std::string_view::npos)
+        {
+            break;
+        }
     }
+
     // Add the callback to the leaf node.
     subscriptions->callbacks.push_back(callback);
 
-    m_impl->m_subscription_topics.insert(topic);
+    m_impl->m_subscription_topics.insert(std::string(topic));
     if (m_impl->m_state == Client::Impl::State::CONNECTED)
     {
         if (!m_impl->sendSubscribe(topic))
@@ -202,7 +223,7 @@ void TrueMQTT::Client::subscribe(const std::string &topic, const std::function<v
     }
 }
 
-void TrueMQTT::Client::unsubscribe(const std::string &topic) const
+void TrueMQTT::Client::unsubscribe(const std::string_view topic) const
 {
     std::scoped_lock lock(m_impl->m_state_mutex);
 
@@ -212,34 +233,63 @@ void TrueMQTT::Client::unsubscribe(const std::string &topic) const
         return;
     }
 
-    LOG_DEBUG(m_impl, "Unsubscribing from topic '" + topic + "'");
-
-    // Split the topic on /, to find each part.
-    std::string part;
-    std::stringstream stopic(topic);
-    std::getline(stopic, part, '/');
-
-    // Find the root node, and walk down till we find the leaf node.
-    std::vector<std::tuple<std::string, Client::Impl::SubscriptionPart *>> reverse;
-    Client::Impl::SubscriptionPart *subscriptions = &m_impl->m_subscriptions[part];
-    reverse.emplace_back(part, subscriptions);
-    while (std::getline(stopic, part, '/'))
+    if (m_impl->m_subscription_topics.find(topic) == m_impl->m_subscription_topics.end())
     {
-        subscriptions = &subscriptions->children[part];
-        reverse.emplace_back(part, subscriptions);
+        LOG_ERROR(m_impl, "Cannot unsubscribe from topic '" + std::string(topic) + "' because we are not subscribed to it");
+        return;
     }
+
+    LOG_DEBUG(m_impl, "Unsubscribing from topic '" + std::string(topic) + "'");
+
+    std::vector<std::tuple<std::string_view, Client::Impl::SubscriptionPart *>> reverse;
+
+    // Find where in the tree the callback for this subscription should be removed.
+    Client::Impl::SubscriptionPart *subscriptions = nullptr;
+    std::string_view topic_search = topic;
+    while (true)
+    {
+        std::string_view part = topic_search;
+
+        // Find the next part of the topic.
+        auto pos = topic_search.find('/');
+        if (pos != std::string_view::npos)
+        {
+            part = topic_search.substr(0, pos);
+            topic_search.remove_prefix(pos + 1);
+        }
+
+        // Find the next subscription in the tree.
+        if (subscriptions == nullptr)
+        {
+            subscriptions = &m_impl->m_subscriptions.find(part)->second;
+        }
+        else
+        {
+            subscriptions = &subscriptions->children.find(part)->second;
+        }
+
+        // Update the reverse lookup.
+        reverse.emplace_back(part, subscriptions);
+
+        // If this was the last element, we're done.
+        if (pos == std::string_view::npos)
+        {
+            break;
+        }
+    }
+
     // Clear the callbacks in the leaf node.
     subscriptions->callbacks.clear();
 
     // Bookkeeping: remove any empty nodes.
     // Otherwise we will slowly grow in memory if a user does a lot of unsubscribes
     // on different topics.
-    std::string remove_next = "";
+    std::string_view remove_next = "";
     for (auto it = reverse.rbegin(); it != reverse.rend(); it++)
     {
         if (!remove_next.empty())
         {
-            std::get<1>(*it)->children.erase(remove_next);
+            std::get<1>(*it)->children.erase(std::get<1>(*it)->children.find(remove_next));
             remove_next = "";
         }
 
@@ -250,10 +300,10 @@ void TrueMQTT::Client::unsubscribe(const std::string &topic) const
     }
     if (!remove_next.empty())
     {
-        m_impl->m_subscriptions.erase(remove_next);
+        m_impl->m_subscriptions.erase(m_impl->m_subscriptions.find(remove_next));
     }
 
-    m_impl->m_subscription_topics.erase(topic);
+    m_impl->m_subscription_topics.erase(m_impl->m_subscription_topics.find(topic));
     if (m_impl->m_state == Client::Impl::State::CONNECTED)
     {
         if (!m_impl->sendUnsubscribe(topic))
@@ -312,7 +362,7 @@ void TrueMQTT::Client::Impl::connectionStateChange(bool connected)
     }
 }
 
-bool TrueMQTT::Client::Impl::toPublishQueue(const std::string &topic, const std::string &message, bool retain)
+bool TrueMQTT::Client::Impl::toPublishQueue(const std::string_view topic, const std::string_view message, bool retain)
 {
     if (m_state != Client::Impl::State::CONNECTING)
     {
@@ -346,26 +396,34 @@ bool TrueMQTT::Client::Impl::toPublishQueue(const std::string &topic, const std:
     return true;
 }
 
-void TrueMQTT::Client::Impl::findSubscriptionMatch(std::vector<std::function<void(std::string, std::string)>> &matching_callbacks, const std::map<std::string, Client::Impl::SubscriptionPart> &subscriptions, std::deque<std::string> &parts)
+void TrueMQTT::Client::Impl::findSubscriptionMatch(std::string_view topic, std::string_view message, std::string_view topic_search, const std::map<std::string, Client::Impl::SubscriptionPart, std::less<>> &subscriptions)
 {
-    // If we reached the end of the topic, do nothing anymore.
-    if (parts.empty())
+    std::string_view part = topic_search;
+
+    // Find the next part of the topic.
+    auto pos = topic_search.find('/');
+    if (pos != std::string_view::npos)
     {
-        return;
+        part = topic_search.substr(0, pos);
+        topic_search.remove_prefix(pos + 1);
     }
 
-    LOG_TRACE(this, "Finding subscription match for part '" + parts.front() + "'");
-
     // Find the match based on the part.
-    auto it = subscriptions.find(parts.front());
+    auto it = subscriptions.find(part);
     if (it != subscriptions.end())
     {
-        LOG_TRACE(this, "Found subscription match for part '" + parts.front() + "' with " + std::to_string(it->second.callbacks.size()) + " callbacks");
+        LOG_TRACE(this, "Found subscription match for part '" + std::string(part) + "' with " + std::to_string(it->second.callbacks.size()) + " callbacks");
 
-        matching_callbacks.insert(matching_callbacks.end(), it->second.callbacks.begin(), it->second.callbacks.end());
+        for (const auto &callback : it->second.callbacks)
+        {
+            callback(topic, message);
+        }
 
-        std::deque<std::string> remaining_parts(parts.begin() + 1, parts.end());
-        findSubscriptionMatch(matching_callbacks, it->second.children, remaining_parts);
+        // Recursively find the match for the next part if we didn't reach the end.
+        if (pos != std::string_view::npos)
+        {
+            findSubscriptionMatch(topic, message, topic_search, it->second.children);
+        }
     }
 
     // Find the match if this part is a wildcard.
@@ -374,10 +432,16 @@ void TrueMQTT::Client::Impl::findSubscriptionMatch(std::vector<std::function<voi
     {
         LOG_TRACE(this, "Found subscription match for '+' with " + std::to_string(it->second.callbacks.size()) + " callbacks");
 
-        matching_callbacks.insert(matching_callbacks.end(), it->second.callbacks.begin(), it->second.callbacks.end());
+        for (const auto &callback : it->second.callbacks)
+        {
+            callback(topic, message);
+        }
 
-        std::deque<std::string> remaining_parts(parts.begin() + 1, parts.end());
-        findSubscriptionMatch(matching_callbacks, it->second.children, remaining_parts);
+        // Recursively find the match for the next part if we didn't reach the end.
+        if (pos != std::string_view::npos)
+        {
+            findSubscriptionMatch(topic, message, topic_search, it->second.children);
+        }
     }
 
     // Find the match if the remaining is a wildcard.
@@ -386,40 +450,27 @@ void TrueMQTT::Client::Impl::findSubscriptionMatch(std::vector<std::function<voi
     {
         LOG_TRACE(this, "Found subscription match for '#' with " + std::to_string(it->second.callbacks.size()) + " callbacks");
 
-        matching_callbacks.insert(matching_callbacks.end(), it->second.callbacks.begin(), it->second.callbacks.end());
+        for (const auto &callback : it->second.callbacks)
+        {
+            callback(topic, message);
+        }
+
         // No more recursion here, as we implicit consume the rest of the parts too.
     }
 }
 
-void TrueMQTT::Client::Impl::messageReceived(std::string topic, std::string message)
+void TrueMQTT::Client::Impl::messageReceived(std::string_view topic, std::string_view message)
 {
-    LOG_TRACE(this, "Message received on topic '" + topic + "': " + message);
+    std::scoped_lock lock(m_state_mutex);
 
-    // Split the topic on the / in parts.
-    std::string part;
-    std::stringstream stopic(topic);
-    std::deque<std::string> parts;
-    while (std::getline(stopic, part, '/'))
+    LOG_TRACE(this, "Message received on topic '" + std::string(topic) + "': " + std::string(message));
+
+    if (m_state != State::CONNECTED)
     {
-        parts.emplace_back(part);
+        // This happens easily when the subscribed to a really busy topic and you disconnect.
+        LOG_ERROR(this, "Received message while not connected");
+        return;
     }
 
-    // Find the matching subscription(s) with recursion.
-    std::vector<std::function<void(std::string, std::string)>> matching_callbacks;
-    findSubscriptionMatch(matching_callbacks, m_subscriptions, parts);
-
-    LOG_TRACE(this, "Found " + std::to_string(matching_callbacks.size()) + " subscription(s) for topic '" + topic + "'");
-
-    if (matching_callbacks.size() == 1)
-    {
-        // For a single callback there is no need to copy the topic/message.
-        matching_callbacks[0](std::move(topic), std::move(message));
-    }
-    else
-    {
-        for (const auto &callback : matching_callbacks)
-        {
-            callback(topic, message);
-        }
-    }
+    findSubscriptionMatch(topic, message, topic, m_subscriptions);
 }

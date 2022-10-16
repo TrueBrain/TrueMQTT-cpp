@@ -10,6 +10,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <string_view>
 
 namespace TrueMQTT
 {
@@ -116,9 +117,9 @@ namespace TrueMQTT
          * @param connection_backoff_max Maximum time between backoff attempts in seconds.
          * @param keep_alive_interval Interval in seconds between keep-alive messages.
          */
-        Client(const std::string &host,
+        Client(const std::string_view host,
                int port,
-               const std::string &client_id,
+               const std::string_view client_id,
                std::chrono::milliseconds connection_timeout = std::chrono::milliseconds(5000),
                std::chrono::milliseconds connection_backoff = std::chrono::milliseconds(1000),
                std::chrono::milliseconds connection_backoff_max = std::chrono::milliseconds(30000),
@@ -142,7 +143,7 @@ namespace TrueMQTT
          * @note This library doesn't contain a logger, so you need to provide one.
          * If this method is not called, no logging will be done.
          */
-        void setLogger(LogLevel log_level, const std::function<void(LogLevel, std::string)> &logger) const;
+        void setLogger(LogLevel log_level, const std::function<void(LogLevel, std::string_view)> &logger) const;
 
         /**
          * @brief Set the last will message on the connection.
@@ -155,14 +156,14 @@ namespace TrueMQTT
          *
          * @note Cannot be called after \ref connect.
          */
-        void setLastWill(const std::string &topic, const std::string &message, bool retain) const;
+        void setLastWill(const std::string_view topic, const std::string_view message, bool retain) const;
 
         /**
          * @brief Set the error callback, called when any error occurs.
          *
          * @param callback The callback to call when an error occurs.
          */
-        void setErrorCallback(const std::function<void(Error, std::string)> &callback) const;
+        void setErrorCallback(const std::function<void(Error, std::string_view)> &callback) const;
 
         /**
          * @brief Set the publish queue to use.
@@ -247,7 +248,7 @@ namespace TrueMQTT
          * in this case, but it is wise to back off for a while before sending something
          * again.
          */
-        bool publish(const std::string &topic, const std::string &message, bool retain) const;
+        bool publish(const std::string_view topic, const std::string_view message, bool retain) const;
 
         /**
          * @brief Subscribe to a topic, and call the callback function when a message arrives.
@@ -261,6 +262,9 @@ namespace TrueMQTT
          * @param topic The topic to subscribe to.
          * @param callback The callback to call when a message arrives on this topic.
          *
+         * @note The callback receives a string_view for topic/message, which is only valid
+         * for the duration of the callback. If you need to retain the value of longer,
+         * make sure to copy the content.
          * @note Subscription can overlap, even on the exact same topic. All callbacks that
          * match the topic will be called.
          * @note Depending on the broker, overlapping subscriptions can trigger one or more
@@ -279,7 +283,7 @@ namespace TrueMQTT
          * moment the connection to the broker is established, and there are messages in the
          * publish queue and/or subscriptions.
          */
-        void subscribe(const std::string &topic, const std::function<void(std::string, std::string)> &callback) const;
+        void subscribe(const std::string_view topic, const std::function<void(std::string_view, std::string_view)> &callback) const;
 
         /**
          * @brief Unsubscribe from a topic.
@@ -295,7 +299,7 @@ namespace TrueMQTT
          * moment the connection to the broker is established, and there are messages in the
          * publish queue and/or subscriptions.
          */
-        void unsubscribe(const std::string &topic) const;
+        void unsubscribe(const std::string_view topic) const;
 
     private:
         // Private implementation

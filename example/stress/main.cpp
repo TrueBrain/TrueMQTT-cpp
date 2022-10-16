@@ -14,10 +14,10 @@ int main()
     // Create a connection to the local broker.
     TrueMQTT::Client client("localhost", 1883, "test");
 
-    client.setLogger(TrueMQTT::Client::LogLevel::WARNING, [](TrueMQTT::Client::LogLevel level, std::string message)
+    client.setLogger(TrueMQTT::Client::LogLevel::WARNING, [](TrueMQTT::Client::LogLevel level, std::string_view message)
                      { std::cout << "Log " << level << ": " << message << std::endl; });
     client.setPublishQueue(TrueMQTT::Client::PublishQueueType::FIFO, 100);
-    client.setErrorCallback([](TrueMQTT::Client::Error error, std::string message)
+    client.setErrorCallback([](TrueMQTT::Client::Error error, std::string_view message)
                             { std::cout << "Error " << error << ": " << message << std::endl; });
     client.setLastWill("test/lastwill", "example pubsub finished", true);
 
@@ -30,11 +30,11 @@ int main()
     int64_t totalLatency = 0;
 
     // Subscribe to the topic we are going to stress test.
-    client.subscribe("example/stress/+", [&received, &totalLatency](const std::string topic, const std::string payload)
+    client.subscribe("example/stress/+", [&received, &totalLatency](const std::string_view topic, const std::string_view payload)
                      {
         // Calculate the latency.
         auto now = std::chrono::steady_clock::now();
-        auto then = std::chrono::time_point<std::chrono::steady_clock>(std::chrono::microseconds(std::stoll(payload)));
+        auto then = std::chrono::time_point<std::chrono::steady_clock>(std::chrono::microseconds(std::stoll(std::string(payload))));
         auto latency = std::chrono::duration_cast<std::chrono::microseconds>(now - then).count();
 
         totalLatency += latency;

@@ -66,10 +66,10 @@ public:
         m_buffer.insert(m_buffer.end(), data, data + length);
     }
 
-    void write_string(const std::string &str)
+    void write_string(const std::string_view str)
     {
         write_uint16(static_cast<uint16_t>(str.size()));
-        write(str.c_str(), str.size());
+        write(str.data(), str.size());
     }
 
     bool read_uint8(uint8_t &value)
@@ -93,7 +93,7 @@ public:
         return true;
     }
 
-    bool read_string(std::string &str)
+    bool read_string(std::string_view &str)
     {
         uint16_t length;
         if (!read_uint16(length))
@@ -104,16 +104,15 @@ public:
         {
             return false;
         }
-        const char *data = reinterpret_cast<const char *>(m_buffer.data()) + m_read_offset;
-        str.assign(data, length);
+
+        str = std::string_view(reinterpret_cast<const char *>(m_buffer.data() + m_read_offset), length);
         m_read_offset += length;
         return true;
     }
 
-    void read_remaining(std::string &str)
+    void read_remaining(std::string_view &str)
     {
-        const char *data = reinterpret_cast<const char *>(m_buffer.data()) + m_read_offset;
-        str.assign(data, m_buffer.size() - m_read_offset);
+        str = std::string_view(reinterpret_cast<const char *>(m_buffer.data() + m_read_offset), m_buffer.size() - m_read_offset);
         m_read_offset = m_buffer.size();
     }
 

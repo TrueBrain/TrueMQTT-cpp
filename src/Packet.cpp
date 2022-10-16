@@ -177,19 +177,19 @@ bool TrueMQTT::Client::Impl::Connection::recvLoop()
     }
     case Packet::PacketType::PUBLISH:
     {
-        std::string topic;
+        std::string_view topic;
         if (!packet.read_string(topic))
         {
             LOG_ERROR(&m_impl, "Malformed packet received, closing connection");
             return false;
         }
 
-        std::string message;
+        std::string_view message;
         packet.read_remaining(message);
 
-        LOG_DEBUG(&m_impl, "Received PUBLISH with topic " + topic + ": " + message);
+        LOG_DEBUG(&m_impl, "Received PUBLISH with topic " + std::string(topic) + ": " + std::string(message));
 
-        m_impl.messageReceived(std::move(topic), std::move(message));
+        m_impl.messageReceived(topic, message);
         break;
     }
     case Packet::PacketType::SUBACK:
@@ -288,7 +288,6 @@ bool TrueMQTT::Client::Impl::Connection::send(Packet packet, bool has_priority)
         {
             m_send_queue.push_back(std::move(packet));
         }
-
     }
     // Notify the write thread that there is a new packet.
     m_send_queue_cv.notify_one();
@@ -374,9 +373,9 @@ bool TrueMQTT::Client::Impl::Connection::sendPingRequest()
     return send(std::move(packet), true);
 }
 
-bool TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::string &message, bool retain)
+bool TrueMQTT::Client::Impl::sendPublish(const std::string_view topic, const std::string_view message, bool retain)
 {
-    LOG_TRACE(this, "Sending PUBLISH packet to topic '" + topic + "': " + message + " (" + (retain ? "retained" : "not retained") + ")");
+    LOG_TRACE(this, "Sending PUBLISH packet to topic '" + std::string(topic) + "': " + std::string(message) + " (" + (retain ? "retained" : "not retained") + ")");
 
     uint8_t flags = 0;
     flags |= (retain ? 1 : 0) << 0; // Retain
@@ -386,14 +385,14 @@ bool TrueMQTT::Client::Impl::sendPublish(const std::string &topic, const std::st
     Packet packet(Packet::PacketType::PUBLISH, flags);
 
     packet.write_string(topic);
-    packet.write(message.c_str(), message.size());
+    packet.write(message.data(), message.size());
 
     return m_connection->send(std::move(packet));
 }
 
-bool TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
+bool TrueMQTT::Client::Impl::sendSubscribe(const std::string_view topic)
 {
-    LOG_TRACE(this, "Sending SUBSCRIBE packet for topic '" + topic + "'");
+    LOG_TRACE(this, "Sending SUBSCRIBE packet for topic '" + std::string(topic) + "'");
 
     Packet packet(Packet::PacketType::SUBSCRIBE, 2);
 
@@ -410,9 +409,9 @@ bool TrueMQTT::Client::Impl::sendSubscribe(const std::string &topic)
     return m_connection->send(std::move(packet));
 }
 
-bool TrueMQTT::Client::Impl::sendUnsubscribe(const std::string &topic)
+bool TrueMQTT::Client::Impl::sendUnsubscribe(const std::string_view topic)
 {
-    LOG_TRACE(this, "Sending unsubscribe message for topic '" + topic + "'");
+    LOG_TRACE(this, "Sending unsubscribe message for topic '" + std::string(topic) + "'");
 
     Packet packet(Packet::PacketType::UNSUBSCRIBE, 2);
 
