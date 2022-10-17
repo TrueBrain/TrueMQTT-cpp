@@ -29,7 +29,7 @@
 class TrueMQTT::Client::Impl::Connection
 {
 public:
-    Connection(TrueMQTT::Client::Impl &impl);
+    explicit Connection(TrueMQTT::Client::Impl &impl);
     ~Connection();
 
     bool send(Packet packet, bool has_priority = false);

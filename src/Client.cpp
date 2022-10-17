@@ -50,9 +50,7 @@ TrueMQTT::Client::Impl::Impl(const std::string_view host,
 {
 }
 
-TrueMQTT::Client::Impl::~Impl()
-{
-}
+TrueMQTT::Client::Impl::~Impl() = default;
 
 void TrueMQTT::Client::setLogger(Client::LogLevel log_level, const std::function<void(Client::LogLevel, std::string_view)> &logger) const
 {
@@ -211,7 +209,7 @@ void TrueMQTT::Client::subscribe(const std::string_view topic, const std::functi
     // Add the callback to the leaf node.
     subscriptions->callbacks.push_back(callback);
 
-    m_impl->m_subscription_topics.insert(std::string(topic));
+    m_impl->m_subscription_topics.emplace(topic);
     if (m_impl->m_state == Client::Impl::State::CONNECTED)
     {
         if (!m_impl->sendSubscribe(topic))

@@ -13,7 +13,7 @@
 class Packet
 {
 public:
-    enum class PacketType
+    enum class PacketType : uint8_t
     {
         CONNECT = 1,
         CONNACK = 2,

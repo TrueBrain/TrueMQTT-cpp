@@ -128,7 +128,7 @@ void TrueMQTT::Client::Impl::Connection::runRead()
 
 std::optional<Packet> TrueMQTT::Client::Impl::Connection::popSendQueueBlocking()
 {
-    std::unique_lock<std::mutex> lock(m_send_queue_mutex);
+    std::unique_lock lock(m_send_queue_mutex);
     if (!m_send_queue.empty())
     {
         auto packet = m_send_queue.front();
@@ -213,7 +213,7 @@ void TrueMQTT::Client::Impl::Connection::resolve()
     int error = getaddrinfo(m_impl.m_host.c_str(), std::to_string(m_impl.m_port).c_str(), &hints, &m_host_resolved);
     if (error != 0)
     {
-        m_impl.m_error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, std::string(gai_strerror(error)));
+        m_impl.m_error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, std::string_view(gai_strerror(error)));
         return;
     }
 
