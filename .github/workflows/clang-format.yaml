@@ -1,0 +1,22 @@
+name: Code formatting
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  clang_format:
+    name: Code formatting
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Check code format
+      run: |
+        clang-format-12 src/* example/*/*.cpp --dry-run -Werror
