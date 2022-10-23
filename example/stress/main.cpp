@@ -16,11 +16,18 @@ int main()
     // Create a connection to the local broker.
     TrueMQTT::Client client("localhost", 1883, "test");
 
-    client.setLogger(TrueMQTT::Client::LogLevel::WARNING, [](TrueMQTT::Client::LogLevel level, std::string_view message)
-                     { std::cout << "Log " << std::string(magic_enum::enum_name(level)) << ": " << message << std::endl; });
+    client.setLogger(
+        TrueMQTT::Client::LogLevel::WARNING,
+        [](TrueMQTT::Client::LogLevel level, std::string_view message)
+        {
+            std::cout << "Log " << std::string(magic_enum::enum_name(level)) << ": " << message << std::endl;
+        });
     client.setPublishQueue(TrueMQTT::Client::PublishQueueType::FIFO, 100);
-    client.setErrorCallback([](TrueMQTT::Client::Error error, std::string_view message)
-                            { std::cout << "Error " << std::string(magic_enum::enum_name(error)) << ": " << message << std::endl; });
+    client.setErrorCallback(
+        [](TrueMQTT::Client::Error error, std::string_view message)
+        {
+            std::cout << "Error " << std::string(magic_enum::enum_name(error)) << ": " << message << std::endl;
+        });
     client.setLastWill("test/lastwill", "example pubsub finished", true);
 
     client.connect();
@@ -32,15 +39,18 @@ int main()
     int64_t totalLatency = 0;
 
     // Subscribe to the topic we are going to stress test.
-    client.subscribe("example/stress/+", [&received, &totalLatency](const std::string_view topic, const std::string_view payload)
-                     {
-        // Calculate the latency.
-        auto now = std::chrono::steady_clock::now();
-        auto then = std::chrono::time_point<std::chrono::steady_clock>(std::chrono::microseconds(std::stoll(std::string(payload))));
-        auto latency = std::chrono::duration_cast<std::chrono::microseconds>(now - then).count();
+    client.subscribe(
+        "example/stress/+",
+        [&received, &totalLatency](const std::string_view topic, const std::string_view payload)
+        {
+            // Calculate the latency.
+            auto now = std::chrono::steady_clock::now();
+            auto then = std::chrono::time_point<std::chrono::steady_clock>(std::chrono::microseconds(std::stoll(std::string(payload))));
+            auto latency = std::chrono::duration_cast<std::chrono::microseconds>(now - then).count();
 
-        totalLatency += latency;
-        received++; });
+            totalLatency += latency;
+            received++;
+        });
 
     // Send a lot of packets constantly, while telling us when publishing is failing.
     // The expected behaviour is that this goes okay for a while, till the broker
