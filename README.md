@@ -6,9 +6,22 @@ All basic functionality is in there, but it is lacking some QoL functionalities,
 
 ## Development
 
+Prepare a build folder:
+
 ```bash
 mkdir build
 cd build
+```
+
+Install dependencies via [conan](https://conan.io/downloads.html):
+
+```bash
+conan install ..
+```
+
+Now you can compile this library:
+
+```bash
 cmake .. -DBUILD_SHARED_LIBS=ON -DMIN_LOGGER_LEVEL=INFO
 make -j$(nproc)
 

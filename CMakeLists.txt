@@ -17,6 +17,9 @@ set(MIN_LOGGER_LEVEL "INFO" CACHE STRING "Set minimal logger level (TRACE, DEBUG
 
 include(GNUInstallDirs)
 
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup()
+
 add_library(${PROJECT_NAME}
     src/Client.cpp
     src/Connection.cpp
@@ -25,11 +28,10 @@ add_library(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME}
     PUBLIC include
     PRIVATE src
-    PRIVATE vendor/magic_enum/include
 )
 
 find_package(Threads REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${CONAN_LIBS} Threads::Threads)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION 1 PUBLIC_HEADER include/TrueMQTT.h)
 configure_file(truemqtt.pc.in truemqtt.pc @ONLY)
