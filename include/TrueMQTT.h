@@ -152,6 +152,8 @@ namespace TrueMQTT
          *
          * @note This library doesn't contain a logger, so you need to provide one.
          * If this method is not called, no logging will be done.
+         * @note The logger callback can be called from several threads, so make sure
+         * the callback is thread-safe.
          */
         void setLogger(LogLevel log_level, const std::function<void(LogLevel, std::string_view)> &logger) const;
 
