@@ -1,0 +1,55 @@
+name: Regression
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  regression:
+    name: Regression
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - broker: Mosquitto
+          command: docker run --rm -d -p 1883:1883 -v $(pwd)/regression/configs/mosquitto:/mosquitto/config eclipse-mosquitto
+        # NATS doesn't deduplicate subscriptions, and this library doesn't either; in result, the regression fails
+        # - broker: NATS
+        #   command: docker run --rm -d -v $(pwd)/regression/configs/nats:/config -p 1883:1883 nats -c /config/nats.conf
+        # FlashMQ doesn't deduplicate subscriptions, and this library doesn't either; in result, the regression fails
+        # - broker: FlashMQ
+        #   command: docker run --rm -d -v $(pwd)/regression/configs/flashmq:/etc/flashmq -p 1883:1883 ghcr.io/truebrain/containers/flashmq
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Install conan & gcovr
+      run: |
+        pip install conan gcovr
+        conan profile new default --detect
+        conan profile update settings.compiler.libcxx=libstdc++11 default
+
+    - name: Start ${{ matrix.broker }}
+      run: |
+        ${{ matrix.command }}
+
+    - name: Build library
+      run: |
+        mkdir build
+        cd build
+        conan install ..
+        cmake .. -DCODE_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
+        make coverage
+        make coverage-html
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report-${{ matrix.broker }}
+        path: build/coverage-html

@@ -87,6 +87,11 @@ void TrueMQTT::Client::Impl::Connection::runRead()
 
             std::this_thread::sleep_for(m_backoff);
 
+            if (m_state == State::STOP)
+            {
+                break;
+            }
+
             // Calculate the next backoff time, slowly reducing how often we retry.
             m_backoff *= 2;
             if (m_backoff > m_impl.m_connection_backoff_max)
