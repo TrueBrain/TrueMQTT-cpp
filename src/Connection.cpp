@@ -18,10 +18,14 @@
 
 TrueMQTT::Client::Impl::Connection::Connection(Client::Impl &impl)
     : m_impl(impl),
-      m_thread_read(&Connection::runRead, this),
-      m_thread_write(&Connection::runWrite, this),
       m_backoff(impl.m_connection_backoff)
 {
+    // This has to be delayed to inside the ctor body, as otherwise other
+    // parts of the object might not been initialized yet, and the threads
+    // might already start running (and using these not initialized parts).
+    m_thread_read = std::thread(&Connection::runRead, this);
+    m_thread_write = std::thread(&Connection::runWrite, this);
+
     pthread_setname_np(m_thread_read.native_handle(), "TrueMQTT::Read");
     pthread_setname_np(m_thread_write.native_handle(), "TrueMQTT::Write");
 }
