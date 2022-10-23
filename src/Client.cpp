@@ -64,7 +64,7 @@ void TrueMQTT::Client::setLogger(Client::LogLevel log_level, const std::function
 
 void TrueMQTT::Client::setLastWill(const std::string_view topic, const std::string_view message, bool retain) const
 {
-    if (m_impl->m_state != Client::Impl::State::DISCONNECTED)
+    if (m_impl->m_state != Client::State::DISCONNECTED)
     {
         LOG_ERROR(m_impl, "Cannot set last will when not disconnected");
         return;
@@ -86,7 +86,7 @@ void TrueMQTT::Client::setErrorCallback(const std::function<void(Error, std::str
 
 void TrueMQTT::Client::setPublishQueue(Client::PublishQueueType queue_type, size_t size) const
 {
-    if (m_impl->m_state != Client::Impl::State::DISCONNECTED)
+    if (m_impl->m_state != Client::State::DISCONNECTED)
     {
         LOG_ERROR(m_impl, "Cannot set publish queue when not disconnected");
         return;
@@ -100,7 +100,7 @@ void TrueMQTT::Client::setPublishQueue(Client::PublishQueueType queue_type, size
 
 void TrueMQTT::Client::setSendQueue(size_t size) const
 {
-    if (m_impl->m_state != Client::Impl::State::DISCONNECTED)
+    if (m_impl->m_state != Client::State::DISCONNECTED)
     {
         LOG_ERROR(m_impl, "Cannot set send queue when not disconnected");
         return;
@@ -111,18 +111,27 @@ void TrueMQTT::Client::setSendQueue(size_t size) const
     m_impl->m_send_queue_size = size;
 }
 
+void TrueMQTT::Client::setStateChangeCallback(const std::function<void(State)> &callback) const
+{
+    LOG_TRACE(m_impl, "Setting state callback");
+
+    m_impl->m_state_change_callback = callback;
+}
+
 void TrueMQTT::Client::connect() const
 {
     std::scoped_lock lock(m_impl->m_state_mutex);
 
-    if (m_impl->m_state != Client::Impl::State::DISCONNECTED)
+    if (m_impl->m_state != Client::State::DISCONNECTED)
     {
+        LOG_ERROR(m_impl, "Can't connect when already connecting / connected");
         return;
     }
 
     LOG_INFO(m_impl, "Connecting to " + m_impl->m_host + ":" + std::to_string(m_impl->m_port));
 
-    m_impl->m_state = Client::Impl::State::CONNECTING;
+    m_impl->m_state = Client::State::CONNECTING;
+    m_impl->m_state_change_callback(m_impl->m_state);
     m_impl->connect();
 }
 
@@ -130,15 +139,16 @@ void TrueMQTT::Client::disconnect() const
 {
     std::scoped_lock lock(m_impl->m_state_mutex);
 
-    if (m_impl->m_state == Client::Impl::State::DISCONNECTED)
+    if (m_impl->m_state == Client::State::DISCONNECTED)
     {
-        LOG_TRACE(m_impl, "Already disconnected");
+        LOG_ERROR(m_impl, "Can't disconnect when already disconnected");
         return;
     }
 
     LOG_INFO(m_impl, "Disconnecting from broker");
 
-    m_impl->m_state = Client::Impl::State::DISCONNECTED;
+    m_impl->m_state = Client::State::DISCONNECTED;
+    m_impl->m_state_change_callback(m_impl->m_state);
     m_impl->disconnect();
 }
 
@@ -150,12 +160,12 @@ bool TrueMQTT::Client::publish(const std::string_view topic, const std::string_v
 
     switch (m_impl->m_state)
     {
-    case Client::Impl::State::DISCONNECTED:
+    case Client::State::DISCONNECTED:
         LOG_ERROR(m_impl, "Cannot publish when disconnected");
         return false;
-    case Client::Impl::State::CONNECTING:
+    case Client::State::CONNECTING:
         return m_impl->toPublishQueue(topic, message, retain);
-    case Client::Impl::State::CONNECTED:
+    case Client::State::CONNECTED:
         return m_impl->sendPublish(topic, message, retain);
     }
 
@@ -166,7 +176,7 @@ void TrueMQTT::Client::subscribe(const std::string_view topic, const std::functi
 {
     std::scoped_lock lock(m_impl->m_state_mutex);
 
-    if (m_impl->m_state == Client::Impl::State::DISCONNECTED)
+    if (m_impl->m_state == Client::State::DISCONNECTED)
     {
         LOG_ERROR(m_impl, "Cannot subscribe when disconnected");
         return;
@@ -210,7 +220,7 @@ void TrueMQTT::Client::subscribe(const std::string_view topic, const std::functi
     subscriptions->callbacks.push_back(callback);
 
     m_impl->m_subscription_topics.emplace(topic);
-    if (m_impl->m_state == Client::Impl::State::CONNECTED)
+    if (m_impl->m_state == Client::State::CONNECTED)
     {
         if (!m_impl->sendSubscribe(topic))
         {
@@ -225,7 +235,7 @@ void TrueMQTT::Client::unsubscribe(const std::string_view topic) const
 {
     std::scoped_lock lock(m_impl->m_state_mutex);
 
-    if (m_impl->m_state == Client::Impl::State::DISCONNECTED)
+    if (m_impl->m_state == Client::State::DISCONNECTED)
     {
         LOG_ERROR(m_impl, "Cannot unsubscribe when disconnected");
         return;
@@ -302,7 +312,7 @@ void TrueMQTT::Client::unsubscribe(const std::string_view topic) const
     }
 
     m_impl->m_subscription_topics.erase(m_impl->m_subscription_topics.find(topic));
-    if (m_impl->m_state == Client::Impl::State::CONNECTED)
+    if (m_impl->m_state == Client::State::CONNECTED)
     {
         if (!m_impl->sendUnsubscribe(topic))
         {
@@ -321,7 +331,8 @@ void TrueMQTT::Client::Impl::connectionStateChange(bool connected)
     {
         LOG_INFO(this, "Connected to broker");
 
-        m_state = Client::Impl::State::CONNECTED;
+        m_state = Client::State::CONNECTED;
+        m_state_change_callback(m_state);
 
         // Restoring subscriptions and flushing the queue is done while still under
         // the lock. This to prevent \ref disconnect from being called while we are
@@ -356,13 +367,14 @@ void TrueMQTT::Client::Impl::connectionStateChange(bool connected)
     else
     {
         LOG_INFO(this, "Disconnected from broker");
-        m_state = Client::Impl::State::CONNECTING;
+        m_state = Client::State::CONNECTING;
+        m_state_change_callback(m_state);
     }
 }
 
 bool TrueMQTT::Client::Impl::toPublishQueue(const std::string_view topic, const std::string_view message, bool retain)
 {
-    if (m_state != Client::Impl::State::CONNECTING)
+    if (m_state != Client::State::CONNECTING)
     {
         LOG_ERROR(this, "Cannot queue publish message when not connecting");
         return false;

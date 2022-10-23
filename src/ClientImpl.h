@@ -31,13 +31,6 @@ public:
          std::chrono::milliseconds keep_alive_interval);
     ~Impl();
 
-    enum State
-    {
-        DISCONNECTED, ///< The client is not connected to the broker, nor is it trying to connect.
-        CONNECTING,   ///< The client is either connecting or reconnecting to the broker. This can be in any stage of the connection process.
-        CONNECTED,    ///< The client is connected to the broker.
-    };
-
     class SubscriptionPart
     {
     public:
@@ -69,6 +62,8 @@ public:
 
     Client::LogLevel m_log_level = Client::LogLevel::NONE;                                                                     ///< The log level to use.
     std::function<void(Client::LogLevel, std::string_view)> m_logger = [](Client::LogLevel, std::string_view) { /* empty */ }; ///< Logger callback.
+
+    std::function<void(State)> m_state_change_callback = [](State) { /* empty */ }; ///< Callback when the connection state changes.
 
     std::string m_last_will_topic = "";   ///< Topic to publish the last will message to.
     std::string m_last_will_message = ""; ///< Message to publish on the last will topic.

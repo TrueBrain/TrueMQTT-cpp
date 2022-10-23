@@ -6,7 +6,9 @@
  */
 
 #include <TrueMQTT.h>
+
 #include <iostream>
+#include <magic_enum.hpp>
 #include <thread>
 
 int main()
@@ -15,10 +17,10 @@ int main()
     TrueMQTT::Client client("localhost", 1883, "test");
 
     client.setLogger(TrueMQTT::Client::LogLevel::WARNING, [](TrueMQTT::Client::LogLevel level, std::string_view message)
-                     { std::cout << "Log " << level << ": " << message << std::endl; });
+                     { std::cout << "Log " << std::string(magic_enum::enum_name(level)) << ": " << message << std::endl; });
     client.setPublishQueue(TrueMQTT::Client::PublishQueueType::FIFO, 10);
     client.setErrorCallback([](TrueMQTT::Client::Error error, std::string_view message)
-                            { std::cout << "Error " << error << ": " << message << std::endl; });
+                            { std::cout << "Error " << std::string(magic_enum::enum_name(error)) << ": " << message << std::endl; });
     client.setLastWill("example/pubsub/lastwill", "example pubsub finished", true);
 
     client.connect();

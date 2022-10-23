@@ -10,8 +10,7 @@
 #include "Log.h"
 #include "Packet.h"
 
-#include "magic_enum.hpp"
-
+#include <magic_enum.hpp>
 #include <string.h>
 
 ssize_t TrueMQTT::Client::Impl::Connection::recv(char *buffer, size_t length)

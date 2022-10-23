@@ -24,7 +24,7 @@ namespace TrueMQTT
         /**
          * @brief Error codes that can be returned in the callback set by \ref setErrorCallback.
          */
-        enum Error
+        enum class Error
         {
             /**
              * @brief The hostname could not be resolved into either an IPv4 or IPv6 address.
@@ -62,7 +62,7 @@ namespace TrueMQTT
          * After all, memory is finite, so this allows you to configure what scenario
          * works best for you.
          */
-        enum PublishQueueType
+        enum class PublishQueueType
         {
             DROP, ///< Do not queue.
 
@@ -96,7 +96,7 @@ namespace TrueMQTT
         /**
          * @brief The log levels used by this library.
          */
-        enum LogLevel
+        enum class LogLevel
         {
             NONE,    ///< Do not log anything (default).
             ERROR,   ///< Something went wrong and the library cannot recover.
@@ -104,6 +104,16 @@ namespace TrueMQTT
             INFO,    ///< Information that might be useful to know.
             DEBUG,   ///< Information that might be useful for debugging.
             TRACE,   ///< Information that is overly verbose to tell exactly what the library is doing.
+        };
+
+        /**
+         * @brief The state of the connection.
+         */
+        enum class State
+        {
+            DISCONNECTED, ///< The client is not connected to a broker.
+            CONNECTING,   ///< The client is (re)connecting to a broker.
+            CONNECTED,    ///< The client is connected to a broker.
         };
 
         /**
@@ -193,6 +203,13 @@ namespace TrueMQTT
          * @param size Size of the send queue.
          */
         void setSendQueue(size_t size) const;
+
+        /**
+         * @brief Set the state-change callback.
+         *
+         * @param callback The callback to call when the state changes.
+         */
+        void setStateChangeCallback(const std::function<void(State)> &callback) const;
 
         /**
          * @brief Connect to the broker.
