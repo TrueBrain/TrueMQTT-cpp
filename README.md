@@ -28,6 +28,13 @@ make -j$(nproc)
 example/pubsub/truemqtt_pubsub
 ```
 
+Or in case you want to run the regression / code coverage:
+
+```bash
+cmake .. -DBUILD_SHARED_LIBS=ON -DMIN_LOGGER_LEVEL=INFO -DCMAKE_BUILD_TYPE=Debug -DCODE_COVERAGE=ON
+make -j$(nproc) coverage-html
+```
+
 ## Design choices
 
 ### MQTT v3 only

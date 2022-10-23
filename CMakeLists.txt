@@ -13,7 +13,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/vendor/cmake-modules")
+
 set(MIN_LOGGER_LEVEL "INFO" CACHE STRING "Set minimal logger level (TRACE, DEBUG, INFO, WARNING, ERROR). No logs below this level will be omitted.")
+set(CODE_COVERAGE "OFF" CACHE STRING "Enable code coverage.")
 
 include(GNUInstallDirs)
 
@@ -50,6 +53,25 @@ endif()
 
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
+if(CODE_COVERAGE)
+    include(CodeCoverage)
+
+    add_subdirectory(regression)
+
+    target_compile_options(${PROJECT_NAME} PRIVATE -Og -g --coverage)
+    target_link_libraries(${PROJECT_NAME} PRIVATE gcov)
+
+    setup_target_for_coverage_gcovr_xml(
+        NAME coverage
+        EXECUTABLE truemqtt_regression
+        BASE_DIRECTORY "${PROJECT_SOURCE_DIR}/src")
+
+    setup_target_for_coverage_gcovr_html(
+        NAME coverage-html
+        EXECUTABLE truemqtt_regression
+        BASE_DIRECTORY "${PROJECT_SOURCE_DIR}/src")
+endif()
 
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES ${CMAKE_BINARY_DIR}/truemqtt.pc DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
