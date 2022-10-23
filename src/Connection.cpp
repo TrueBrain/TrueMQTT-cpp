@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ClientImpl.h"
 #include "Connection.h"
+#include "ClientImpl.h"
 #include "Log.h"
 
 #include <memory.h>
