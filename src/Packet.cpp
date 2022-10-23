@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "Packet.h"
 #include "ClientImpl.h"
 #include "Connection.h"
 #include "Log.h"
-#include "Packet.h"
 
 #include <magic_enum.hpp>
 #include <string.h>
