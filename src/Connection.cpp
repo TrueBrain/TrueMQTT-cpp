@@ -69,7 +69,10 @@ void TrueMQTT::Client::Impl::Connection::runRead()
         switch (m_state)
         {
         case State::RESOLVING:
-            resolve();
+            if (!resolve())
+            {
+                m_state = State::BACKOFF;
+            }
             break;
 
         case State::CONNECTING:
@@ -192,7 +195,7 @@ void TrueMQTT::Client::Impl::Connection::socketError()
     }
 }
 
-void TrueMQTT::Client::Impl::Connection::resolve()
+bool TrueMQTT::Client::Impl::Connection::resolve()
 {
     m_address_current = 0;
     m_socket = INVALID_SOCKET;
@@ -218,7 +221,7 @@ void TrueMQTT::Client::Impl::Connection::resolve()
     if (error != 0)
     {
         m_impl.m_error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, std::string_view(gai_strerror(error)));
-        return;
+        return false;
     }
 
     // Split the list of addresses in two lists, one for IPv4 and one for
@@ -274,7 +277,7 @@ void TrueMQTT::Client::Impl::Connection::resolve()
     if (m_addresses.empty())
     {
         m_impl.m_error_callback(TrueMQTT::Client::Error::HOSTNAME_LOOKUP_FAILED, "");
-        return;
+        return false;
     }
 
     // Only change the state if no disconnect() has been requested in the mean time.
@@ -282,6 +285,7 @@ void TrueMQTT::Client::Impl::Connection::resolve()
     {
         m_state = State::CONNECTING;
     }
+    return true;
 }
 
 bool TrueMQTT::Client::Impl::Connection::connectToAny()

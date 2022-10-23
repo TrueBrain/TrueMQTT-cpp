@@ -39,7 +39,7 @@ private:
     // Implemented in Connection.cpp
     void runRead();
     void runWrite();
-    void resolve();
+    bool resolve();
     bool tryNextAddress();
     void connect(addrinfo *address);
     bool connectToAny();
