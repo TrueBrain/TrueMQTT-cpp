@@ -11,6 +11,7 @@
 #include "Connection.h"
 #include "Log.h"
 
+#include <magic_enum.hpp>
 #include <sstream>
 
 TrueMQTT::Client::Client(const std::string_view host,
@@ -54,12 +55,12 @@ TrueMQTT::Client::Impl::~Impl() = default;
 
 void TrueMQTT::Client::setLogger(Client::LogLevel log_level, const std::function<void(Client::LogLevel, std::string_view)> &logger) const
 {
-    LOG_TRACE(m_impl, "Setting logger to log level " + std::to_string(log_level));
+    LOG_TRACE(m_impl, "Setting logger to log level " + std::string(magic_enum::enum_name(log_level)));
 
     m_impl->m_log_level = log_level;
     m_impl->m_logger = logger;
 
-    LOG_DEBUG(m_impl, "Log level now on " + std::to_string(m_impl->m_log_level));
+    LOG_DEBUG(m_impl, "Log level now on " + std::string(magic_enum::enum_name(m_impl->m_log_level)));
 }
 
 void TrueMQTT::Client::setLastWill(const std::string_view topic, const std::string_view message, bool retain) const
@@ -92,7 +93,7 @@ void TrueMQTT::Client::setPublishQueue(Client::PublishQueueType queue_type, size
         return;
     }
 
-    LOG_TRACE(m_impl, "Setting publish queue to type " + std::to_string(queue_type) + " and size " + std::to_string(size));
+    LOG_TRACE(m_impl, "Setting publish queue to type " + std::string(magic_enum::enum_name(queue_type)) + " and size " + std::to_string(size));
 
     m_impl->m_publish_queue_type = queue_type;
     m_impl->m_publish_queue_size = size;
