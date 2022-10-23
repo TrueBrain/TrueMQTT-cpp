@@ -72,7 +72,7 @@ public:
     std::function<void(Error, std::string_view)> m_error_callback = [](Error, std::string_view) { /* empty */ }; ///< Error callback.
 
     Client::PublishQueueType m_publish_queue_type = Client::PublishQueueType::DROP; ///< The type of queue to use for the publish queue.
-    size_t m_publish_queue_size = -1;                                               ///< Size of the publish queue.
+    size_t m_publish_queue_size = 0;                                                ///< Size of the publish queue.
     std::deque<std::tuple<std::string, std::string, bool>> m_publish_queue;         ///< Queue of publish messages to send to the broker.
 
     size_t m_send_queue_size = 1000; ///< Size of the send queue.
