@@ -6,9 +6,33 @@ on:
     - main
 
 jobs:
-  code_quality:
-    name: Code quality
+  has_sonar_token:
+    name: Check for SonarCloud token
     runs-on: ubuntu-latest
+
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+
+    steps:
+    - name: Check for SonarCloud token
+      id: check
+      run: |
+        if [ -n "${{ secrets.SONAR_TOKEN }}" ];
+        then
+          echo "ok=true" >> $GITHUB_OUTPUT;
+          echo "SONAR_TOKEN secret detected, running Code Quality."
+        else
+          echo "ok=false" >> $GITHUB_OUTPUT;
+          echo "No SONAR_TOKEN secret detected, skipping Code Quality."
+        fi
+
+  code_quality:
+    name: Code quality (SonarCloud)
+    runs-on: ubuntu-latest
+
+    # This prevents running SonarCloud on forks that don't have a SONAR_TOKEN set.
+    needs: has_sonar_token
+    if: needs.has_sonar_token.outputs.ok == 'true'
 
     env:
       SONAR_SCANNER_VERSION: 4.7.0.2747
