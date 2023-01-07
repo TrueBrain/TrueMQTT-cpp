@@ -57,7 +57,6 @@ int main()
     // backs up, after which it starts to fail intermittently. To push the broker
     // to its breaking point, it helps to add additional subscriptions by other
     // means.
-    bool is_failing = true;
     auto start = std::chrono::steady_clock::now();
     int channel = 0;
     while (true)
