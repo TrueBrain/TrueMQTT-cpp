@@ -1,0 +1,47 @@
+name: CodeQL
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Set environment
+      run: |
+        echo "MAKEFLAGS=-j$(nproc)" >> $GITHUB_ENV
+
+    - name: Install conan
+      run: |
+        pip install conan
+        conan profile new default --detect
+        conan profile update settings.compiler.libcxx=libstdc++11 default
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: cpp
+        queries: security-and-quality
+
+    - name: Compile
+      run: |
+        mkdir build
+        cd build
+        conan install ..
+        cmake .. -DMIN_LOGGER_LEVEL=TRACE
+        make -j$(nproc)
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
